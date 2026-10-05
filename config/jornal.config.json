@@ -20,8 +20,8 @@
   "grupo_cadastro": "Cadastro",
   "formato_grupo_mes": "{Mes} {AAAA}",
   "tipos_de_quadro": {
-    "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Responsável":"text","Observação / Bloqueio":"text","Chave":"text"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","campo_motivo":"Observação / Bloqueio","ajuste_dia_nao_util":"manter_e_avisar"},
-    "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Favorecido":"text","Valor (R$)":"numbers","Vencimento":"date","Recorrência":"dropdown","Status":"status","Coordenação":"dropdown","Observação":"text","Chave":"text"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Pago","status_travado":"Travado","status_cancelado":"Cancelado","campo_motivo":"Observação","ajuste_dia_nao_util":"dia_util_mais_proximo"}
+    "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Responsável":"text","Observação / Bloqueio":"text","Chave":"text"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","status_inicial":"Não iniciado","campo_motivo":"Observação / Bloqueio","ajuste_dia_nao_util":"manter_e_avisar"},
+    "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Favorecido":"text","Valor (R$)":"numbers","Vencimento":"date","Recorrência":"dropdown","Status":"status","Coordenação":"dropdown","Observação":"text","Chave":"text"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Pago","status_travado":"Travado","status_cancelado":"Cancelado","status_inicial":"Previsto","campo_motivo":"Observação","ajuste_dia_nao_util":"dia_util_mais_proximo"}
   },
   "empate_dia_util": "anterior",
   "considerar_facultativos_como_nao_util": true,

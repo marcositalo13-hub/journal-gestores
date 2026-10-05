@@ -7,10 +7,6 @@ import type { Ocorrencia } from "../recorrencia";
 import { ordenarPorPosicao, type ColunaMapeada, type ItemNormalizado, type QuadroLido } from "./ler";
 import type { PlanoQuadro } from "./planejar";
 
-export const STATUS_INICIAL: Record<TipoQuadro, string> = {
-  atividades: "Não iniciado",
-  pagamentos: "Previsto",
-};
 
 // ---------- funções puras ----------
 
@@ -72,7 +68,7 @@ export function montarColumnValues(
     if (col) out[col.id] = valorMonday(col.type, v);
   };
   set(t.data, { date: oc.dataEfetiva });
-  set(t.status, { label: STATUS_INICIAL[tipo] });
+  set(t.status, { label: t.status_inicial });
   set("Chave", { text: oc.chave });
   const ajuste = textoAjusteData(oc);
   if (ajuste) set(t.campo_motivo, { text: ajuste });

@@ -25,6 +25,7 @@ export interface TipoQuadroConfig {
   status_concluido: string;
   status_travado: string;
   status_cancelado: string;
+  status_inicial: string;
   campo_motivo: string;
   ajuste_dia_nao_util: AjusteDiaNaoUtil;
 }
@@ -137,7 +138,7 @@ export function validarConfig(c: unknown): JornalConfig {
     }
     if (typeof x.data === "string" && colunas[x.data] !== "date") erros.push(`${p}.data ("${x.data}") deve ser coluna do tipo date`);
     if (typeof x.status === "string" && colunas[x.status] !== "status") erros.push(`${p}.status ("${x.status}") deve ser coluna do tipo status`);
-    for (const k of ["status_concluido", "status_travado", "status_cancelado"]) {
+    for (const k of ["status_concluido", "status_travado", "status_cancelado", "status_inicial"]) {
       if (typeof x[k] !== "string") erros.push(`${p}.${k} deve ser string`);
     }
     if (!Array.isArray(x.obrigatorias)) erros.push(`${p}.obrigatorias deve ser array`);
