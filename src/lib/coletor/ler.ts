@@ -1,3 +1,4 @@
+import { parseGrupoMes } from "../calendario";
 import { getConfig, type JornalConfig, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
 import { mondayQuery } from "../monday/client";
 
@@ -14,6 +15,7 @@ interface ValorApi {
   label?: string | null;
   date?: string | null;
   number?: number | null;
+  values?: { label: string }[] | null;
 }
 interface ItemApi {
   id: string;
@@ -32,7 +34,7 @@ interface QuadroApi {
   name: string;
   hierarchy_type: string | null;
   columns: ColunaApi[];
-  groups: { id: string; title: string }[];
+  groups: { id: string; title: string; position: string | null }[];
   items_page: PaginaApi;
 }
 
@@ -49,6 +51,8 @@ export interface Aviso {
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
     | "recorrencia_desconhecida"
+    | "chave_duplicada"
+    | "grupo_desconhecido"
     | "calendario";
   mensagem: string;
   itemId?: string;
@@ -60,6 +64,14 @@ export interface Valor {
   label: string | null;
   date: string | null;
   number: number | null;
+  /** rótulos de dropdown */
+  labels: string[] | null;
+}
+
+export interface ColunaMapeada {
+  id: string;
+  /** tipo real no monday (ex.: "long_text") */
+  type: string;
 }
 
 export interface ItemNormalizado {
@@ -84,7 +96,10 @@ export interface QuadroLido {
   tipo: TipoQuadro;
   dono: string;
   hierarchyType: string | null;
+  /** grupos na ordem do quadro (por position) */
   grupos: { id: string; titulo: string }[];
+  /** colunas mapeadas por título (null se ausente) */
+  colunas: Record<string, ColunaMapeada | null>;
   itens: ItemNormalizado[];
   avisos: Aviso[];
 }
@@ -98,6 +113,7 @@ const ITEM_FIELDS = `
     ... on StatusValue { label }
     ... on DateValue { date }
     ... on NumbersValue { number }
+    ... on DropdownValue { values { label } }
   }`;
 
 const Q_QUADRO = `
@@ -105,7 +121,7 @@ query ($ids: [ID!]) {
   boards(ids: $ids) {
     id name hierarchy_type
     columns { id title type capabilities { calculated { function } } }
-    groups { id title }
+    groups { id title position }
     items_page(limit: 100) { cursor items { ${ITEM_FIELDS} } }
   }
 }`;
@@ -148,6 +164,7 @@ function normalizarValor(v: ValorApi | undefined, tipo: TipoColuna): Valor | nul
     label: tipo === "status" ? (v.label ?? (text || null)) : null,
     date: tipo === "date" ? (v.date ?? (text ? text.slice(0, 10) : null)) : null,
     number: tipo === "numbers" ? (typeof v.number === "number" ? v.number : text && !isNaN(Number(text)) ? Number(text) : null) : null,
+    labels: tipo === "dropdown" ? (v.values?.map((x) => x.label) ?? (text ? text.split(", ") : [])) : null,
   };
 }
 
@@ -167,16 +184,19 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
 
   // Mapeia colunas POR TÍTULO (ids variam por quadro).
   const idPorTitulo: Record<string, string | null> = {};
+  const colunas: Record<string, ColunaMapeada | null> = {};
   for (const [titulo, tipoEsperado] of Object.entries(tipoCfg.colunas)) {
     const achadas = quadro.columns.filter((c) => c.title.trim() === titulo);
     const col = achadas[0];
     if (!col) {
       av({ codigo: "coluna_ausente", mensagem: `Coluna "${titulo}" (${tipoEsperado}) não existe no quadro.` });
       idPorTitulo[titulo] = null;
+      colunas[titulo] = null;
       continue;
     }
     if (achadas.length > 1) av({ codigo: "coluna_ausente", mensagem: `Coluna "${titulo}" aparece ${achadas.length}x; usando a primeira (${col.id}).` });
     idPorTitulo[titulo] = col.id;
+    colunas[titulo] = { id: col.id, type: col.type };
     if (!TIPOS_ACEITOS[tipoEsperado].includes(col.type)) {
       av({ codigo: "tipo_coluna_errado", mensagem: `Coluna "${titulo}" é "${col.type}", esperado "${tipoEsperado}".` });
     }
@@ -230,16 +250,49 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     return n;
   });
 
+  for (const d of detectarChavesDuplicadas(itens, cfg)) {
+    av({ codigo: "chave_duplicada", mensagem: `Chave "${d.chave}" repetida em ${d.itens.length} itens de grupos de mês: ${d.itens.map((i) => `${i.id} (${i.grupo})`).join(", ")}. Corrija manualmente.` });
+  }
+  const comItens = new Set(itens.map((i) => i.grupo.titulo));
+  for (const g of quadro.groups) {
+    const t = g.title.trim();
+    if (t !== cfg.grupo_cadastro && !parseGrupoMes(t, cfg) && comItens.has(t)) {
+      av({ codigo: "grupo_desconhecido", mensagem: `Grupo "${t}" não é "${cfg.grupo_cadastro}" nem um mês válido, mas tem itens.` });
+    }
+  }
+
   return {
     id: quadro.id,
     nome: quadro.name,
     tipo: qc.tipo,
     dono: qc.dono,
     hierarchyType: quadro.hierarchy_type,
-    grupos: quadro.groups.map((g) => ({ id: g.id, titulo: g.title.trim() })),
+    grupos: ordenarPorPosicao(quadro.groups).map((g) => ({ id: g.id, titulo: g.title.trim() })),
+    colunas,
     itens,
     avisos,
   };
+}
+
+/** A API não devolve os grupos na ordem do quadro; ordena por `position`. */
+export function ordenarPorPosicao<G extends { position: string | null }>(grupos: G[]): G[] {
+  return grupos
+    .map((g, i) => ({ g, i, p: Number(g.position) }))
+    .sort((a, b) => (Number.isFinite(a.p) && Number.isFinite(b.p) ? a.p - b.p : a.i - b.i))
+    .map((x) => x.g);
+}
+
+/** Itens em grupos de mês que compartilham a mesma Chave (nunca corrige nada). */
+export function detectarChavesDuplicadas(
+  itens: Pick<ItemNormalizado, "id" | "chave" | "grupo">[],
+  cfg: JornalConfig = getConfig(),
+): { chave: string; itens: { id: string; grupo: string }[] }[] {
+  const porChave = new Map<string, { id: string; grupo: string }[]>();
+  for (const it of itens) {
+    if (!it.chave || !parseGrupoMes(it.grupo.titulo, cfg)) continue;
+    porChave.set(it.chave, [...(porChave.get(it.chave) ?? []), { id: it.id, grupo: it.grupo.titulo }]);
+  }
+  return [...porChave].filter(([, l]) => l.length > 1).map(([chave, l]) => ({ chave, itens: l }));
 }
 
 /** Lê e valida todos os quadros configurados (somente leitura). */
@@ -256,6 +309,7 @@ export async function lerQuadros(cfg: JornalConfig = getConfig()): Promise<Quadr
         dono: qc.dono,
         hierarchyType: null,
         grupos: [],
+        colunas: {},
         itens: [],
         avisos: [{ quadroId: qc.id, codigo: "quadro_nao_encontrado", mensagem: `Quadro ${qc.id} não encontrado ou sem acesso.` }],
       });

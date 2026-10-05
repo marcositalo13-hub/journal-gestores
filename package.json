@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "coletar:dry": "tsx scripts/coletar-dry-run.ts",
-    "test": "vitest run"
+    "coletar:dry": "tsx scripts/coletar.ts",
+    "test": "vitest run",
+    "coletar": "tsx scripts/coletar.ts"
   },
   "dependencies": {
     "next": "16.3.8",

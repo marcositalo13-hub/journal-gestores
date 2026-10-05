@@ -95,3 +95,26 @@ export function coberturaCalendario(ref: DataISO = hoje(), cfg: JornalConfig = g
   }
   return null;
 }
+
+const DIAS_SEMANA_PT = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+export function nomeDiaDaSemana(d: DataISO): string {
+  return DIAS_SEMANA_PT[diaDaSemana(d)];
+}
+
+/** "dd/mm" */
+export function ddmm(d: DataISO): string {
+  const [, m, day] = partes(d);
+  return `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+}
+
+/** Interpreta um título de grupo de mês ("Outubro 2026"); null se não for um nome válido. */
+export function parseGrupoMes(titulo: string, cfg: JornalConfig = getConfig()): { ano: number; mes: number } | null {
+  // Válido = exatamente o nome que grupoDoMes geraria para esse mês/ano.
+  const ano = Number(/\d{4}/.exec(titulo)?.[0]);
+  if (!ano) return null;
+  for (let mes = 1; mes <= 12; mes++) {
+    if (grupoDoMes(formatar(ano, mes, 1), cfg) === titulo.trim()) return { ano, mes };
+  }
+  return null;
+}
