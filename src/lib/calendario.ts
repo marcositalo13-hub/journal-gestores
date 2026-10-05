@@ -1,0 +1,97 @@
+// Todas as datas são strings "YYYY-MM-DD" no fuso de config.timezone.
+// A aritmética usa Date em UTC apenas como calendário (sem horário), então não há deriva de fuso.
+import { getConfig, type JornalConfig } from "./config";
+
+export type DataISO = string;
+
+const MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+export function partes(d: DataISO): [number, number, number] {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (!m) throw new Error(`Data inválida (esperado YYYY-MM-DD): ${d}`);
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+export function formatar(ano: number, mes: number, dia: number): DataISO {
+  return `${String(ano).padStart(4, "0")}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** Último dia do mês (mes 1–12). */
+export function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+}
+
+export function somarDias(d: DataISO, n: number): DataISO {
+  const [y, m, day] = partes(d);
+  const dt = new Date(Date.UTC(y, m - 1, day + n));
+  return formatar(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+}
+
+/** Soma meses mantendo o ano/mês; retorna [ano, mes] (mes 1–12). */
+export function somarMeses(ano: number, mes: number, n: number): [number, number] {
+  const total = ano * 12 + (mes - 1) + n;
+  return [Math.floor(total / 12), (total % 12) + 1];
+}
+
+/** 0 = domingo ... 6 = sábado */
+export function diaDaSemana(d: DataISO): number {
+  const [y, m, day] = partes(d);
+  return new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+}
+
+export function nomeDoMes(mes: number): string {
+  return MESES_PT[mes - 1];
+}
+
+/** Nome do grupo de mês (ex.: "Outubro 2026") conforme config.formato_grupo_mes. */
+export function grupoDoMes(d: DataISO, cfg: JornalConfig = getConfig()): string {
+  const [y, m] = partes(d);
+  return cfg.formato_grupo_mes.replace("{Mes}", nomeDoMes(m)).replace("{AAAA}", String(y));
+}
+
+/** Data de hoje no fuso configurado. */
+export function hoje(agora: Date = new Date(), cfg: JornalConfig = getConfig()): DataISO {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: cfg.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(agora);
+}
+
+export function ehDiaUtil(d: DataISO, cfg: JornalConfig = getConfig()): boolean {
+  const dow = diaDaSemana(d);
+  if (dow === 0 || dow === 6) return false;
+  if (cfg.feriados.includes(d)) return false;
+  if (cfg.considerar_facultativos_como_nao_util && cfg.facultativos.includes(d)) return false;
+  return true;
+}
+
+/** Dia útil mais próximo (o próprio d se já for útil). Empate resolvido por config.empate_dia_util. */
+export function diaUtilMaisProximo(d: DataISO, cfg: JornalConfig = getConfig()): DataISO {
+  if (ehDiaUtil(d, cfg)) return d;
+  for (let k = 1; k <= 366; k++) {
+    const antes = somarDias(d, -k);
+    const depois = somarDias(d, k);
+    const a = ehDiaUtil(antes, cfg);
+    const p = ehDiaUtil(depois, cfg);
+    if (a && p) return cfg.empate_dia_util === "anterior" ? antes : depois;
+    if (a) return antes;
+    if (p) return depois;
+  }
+  throw new Error(`Nenhum dia útil encontrado perto de ${d}`);
+}
+
+/** Último dia útil estritamente anterior a d. */
+export function diaUtilAnterior(d: DataISO, cfg: JornalConfig = getConfig()): DataISO {
+  for (let k = 1; k <= 366; k++) {
+    const x = somarDias(d, -k);
+    if (ehDiaUtil(x, cfg)) return x;
+  }
+  throw new Error(`Nenhum dia útil encontrado antes de ${d}`);
+}
+
+/** Aviso se a lista de feriados não cobre até hoje()+90 dias; null se estiver ok. */
+export function coberturaCalendario(ref: DataISO = hoje(), cfg: JornalConfig = getConfig()): string | null {
+  const limite = somarDias(ref, 90);
+  const ultimo = [...cfg.feriados].sort().at(-1);
+  if (!ultimo || ultimo < limite) {
+    return `Feriados cadastrados vão só até ${ultimo ?? "(nenhum)"}; é preciso cobrir até ${limite} (hoje + 90 dias).`;
+  }
+  return null;
+}

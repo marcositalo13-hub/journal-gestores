@@ -1,0 +1,30 @@
+{
+  "timezone": "America/Sao_Paulo",
+  "workspace_id": "17838858",
+  "diretor": "Egídio",
+  "gestores": [
+    {"nome":"Solange Mata","area":"Superintendência de Finanças e Operações","reporta_a":"Egídio","quadro_id":null},
+    {"nome":"Solange Mescouto","area":"Gerência Jurídico, Riscos e Compliance","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Lucas Martins","area":"Gerência de Operações e Suporte ao Cliente","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Keite Martins","area":"Coordenação Administrativa e Financeira","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"João Silva","area":"Coordenação de Controladoria","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Graziely Palma","area":"Coordenação Contábil e Fiscal","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Vanessa Petri","area":"Coordenação de Suporte ao Cliente","reporta_a":"Lucas Martins","quadro_id":null},
+    {"nome":"Danielle Aquino","area":"Coordenação de Riscos Pessoais e Ramos Elementares","reporta_a":"Lucas Martins","quadro_id":null}
+  ],
+  "quadros": [
+    {"id":"18434047675","tipo":"pagamentos","dono":"Solange Mata"},
+    {"id":"18434048054","tipo":"atividades","dono":"TESTE"}
+  ],
+  "quadros_ignorados": ["18433983718","18433771734"],
+  "grupo_cadastro": "Cadastro",
+  "formato_grupo_mes": "{Mes} {AAAA}",
+  "tipos_de_quadro": {
+    "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Responsável":"text","Observação / Bloqueio":"text","Chave":"text"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","campo_motivo":"Observação / Bloqueio","ajuste_dia_nao_util":"manter_e_avisar"},
+    "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Favorecido":"text","Valor (R$)":"numbers","Vencimento":"date","Recorrência":"dropdown","Status":"status","Coordenação":"dropdown","Observação":"text","Chave":"text"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Pago","status_travado":"Travado","status_cancelado":"Cancelado","campo_motivo":"Observação","ajuste_dia_nao_util":"dia_util_mais_proximo"}
+  },
+  "empate_dia_util": "anterior",
+  "considerar_facultativos_como_nao_util": true,
+  "feriados": ["2026-01-01","2026-04-03","2026-04-21","2026-05-01","2026-09-07","2026-10-12","2026-11-02","2026-11-15","2026-11-20","2026-11-30","2026-12-25","2027-01-01","2027-03-26","2027-04-21","2027-05-01","2027-09-07","2027-10-12","2027-11-02","2027-11-15","2027-11-20","2027-11-30","2027-12-25"],
+  "facultativos": ["2026-02-16","2026-02-17","2026-06-04","2027-02-08","2027-02-09","2027-05-27"]
+}
