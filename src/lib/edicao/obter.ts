@@ -42,6 +42,11 @@ const lerComCache = unstable_cache(buscarItens, ["edicao-itens-v2"], { revalidat
 // com o cache frio isso viraria duas leituras simultâneas no monday.
 const lerNaRequisicao = cache(() => lerComCache());
 
+/** Itens lidos (mesmo cache e mesma leitura da edição: não faz uma segunda chamada ao monday). */
+export async function obterItens(): Promise<DadosLidos> {
+  return lerNaRequisicao();
+}
+
 /** Edição para uma data específica (YYYY-MM-DD), com a leitura em cache. */
 export async function obterEdicaoEm(data: string): Promise<Edicao> {
   const { itens, semPrazo, geradoEm } = await lerNaRequisicao();
