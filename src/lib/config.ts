@@ -34,6 +34,8 @@ export interface JornalConfig {
   timezone: string;
   workspace_id: string;
   diretor: string;
+  /** e-mails autorizados a entrar no app (comparação em minúsculas) */
+  leitores: string[];
   gestores: Gestor[];
   quadros: QuadroConfig[];
   quadros_ignorados: string[];
@@ -92,6 +94,20 @@ export function validarConfig(c: unknown): JornalConfig {
   if (typeof o.formato_grupo_mes === "string" && !(o.formato_grupo_mes.includes("{Mes}") && o.formato_grupo_mes.includes("{AAAA}"))) {
     erros.push(`"formato_grupo_mes" deve conter {Mes} e {AAAA}`);
   }
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const leitores = arr("leitores");
+  if (Array.isArray(o.leitores) && leitores.length === 0) erros.push(`"leitores" não pode ser vazio`);
+  const vistos = new Set<string>();
+  leitores.forEach((e, i) => {
+    if (typeof e !== "string" || !EMAIL_RE.test(e.trim())) {
+      erros.push(`leitores[${i}] não é um e-mail válido: ${String(e)}`);
+      return;
+    }
+    const n = e.trim().toLowerCase();
+    if (vistos.has(n)) erros.push(`leitores[${i}] duplicado: ${e}`);
+    vistos.add(n);
+  });
 
   arr("gestores").forEach((g, i) => {
     const x = g as Record<string, unknown>;
@@ -170,4 +186,11 @@ let cache: JornalConfig | null = null;
 export function getConfig(): JornalConfig {
   if (!cache) cache = validarConfig(raw);
   return cache;
+}
+
+/** O e-mail está na lista de leitores? (sem diferenciar maiúsculas/minúsculas) */
+export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = getConfig()): boolean {
+  if (!email) return false;
+  const e = email.trim().toLowerCase();
+  return cfg.leitores.some((l) => l.trim().toLowerCase() === e);
 }

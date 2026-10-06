@@ -32,3 +32,11 @@ describe("hoje / grupoDoMes / cobertura", () => {
     expect(coberturaCalendario("2027-10-01")).toMatch(/Feriados/);
   });
 });
+
+describe("dataPorExtenso", () => {
+  it("PT-BR com dia da semana capitalizado", async () => {
+    const { dataPorExtenso } = await import("./calendario");
+    expect(dataPorExtenso("2026-10-06")).toBe("Terça-feira, 6 de outubro de 2026");
+    expect(dataPorExtenso("2027-03-01")).toBe("Segunda-feira, 1 de março de 2027");
+  });
+});

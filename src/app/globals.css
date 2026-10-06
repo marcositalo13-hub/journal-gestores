@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
+/* ---------- Tokens (somente modo claro) ---------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --papel: #ffffff;
+  --papel-alt: #f4f6f9;
+  --tinta: #16181d;
+  --tinta-2: #5a6170;
+  --borda: #e3e6eb;
+  /* TODO: confirmar o hex oficial do azul BRB com a comunicação. */
+  --destaque: #00539f;
+  --alerta: #c62828; /* atrasado / travado */
+  --aviso: #a65f00; /* fim de semana / feriado */
+  --ok: #2e7d32;
+
+  --fonte-sistema: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --altura-abas: 3.5rem;
+
+  color-scheme: light;
 }
 
+/* Tailwind usa os tokens: bg-papel, text-tinta, border-borda, text-destaque... */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-papel: var(--papel);
+  --color-papel-alt: var(--papel-alt);
+  --color-tinta: var(--tinta);
+  --color-tinta-2: var(--tinta-2);
+  --color-borda: var(--borda);
+  --color-destaque: var(--destaque);
+  --color-alerta: var(--alerta);
+  --color-aviso: var(--aviso);
+  --color-ok: var(--ok);
+  --font-sans: var(--fonte-sistema);
+  --font-jornal: var(--font-newsreader), Georgia, "Times New Roman", serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ---------- Base ---------- */
+html {
+  background: var(--papel);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--fonte-sistema);
+  font-size: 1rem; /* mínimo 16px para o corpo */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Tipografia do jornal ---------- */
+.titulo-jornal {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-weight: 700;
+  font-optical-sizing: auto;
+  line-height: 1;
+  letter-spacing: -0.025em; /* tracking negativo em tamanho grande */
+  color: var(--tinta);
+}
+
+/* ---------- Áreas seguras (viewport-fit=cover) ---------- */
+.topo-seguro {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+}
+
+/* ---------- Pressionáveis: feedback imediato no toque ---------- */
+.pressionavel {
+  transition: transform 160ms var(--ease-out), opacity 160ms ease;
+}
+.pressionavel:active {
+  transform: scale(0.97);
+}
+
+/* ---------- Formulário ---------- */
+.campo {
+  min-height: 3rem;
+  width: 100%;
+  border: 1px solid var(--borda);
+  border-radius: 0.75rem;
+  background: var(--papel-alt);
+  padding: 0 1rem;
+  font-size: 1rem; /* ≥16px evita o zoom automático do iOS */
+  color: var(--tinta);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.campo:focus {
+  outline: none;
+  border-color: var(--destaque);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destaque) 18%, transparent);
+  background: var(--papel);
+}
+
+.botao-primario {
+  min-height: 3rem;
+  border-radius: 0.75rem;
+  background: var(--destaque);
+  color: #fff;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  transition: transform 160ms var(--ease-out), opacity 160ms ease;
+}
+.botao-primario:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.botao-primario:disabled {
+  opacity: 0.6;
+}
+.botao-primario:focus-visible,
+.pressionavel:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: 2px;
+}
+
+/* ---------- Barra de abas (material translúcido estilo iOS) ---------- */
+.barra-abas {
+  background: color-mix(in srgb, var(--papel) 82%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid var(--borda);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------- Acessibilidade ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  /* sem movimento; mudanças de cor/opacidade continuam */
+  .pressionavel:active,
+  .botao-primario:active:not(:disabled) {
+    transform: none;
+  }
+  .pressionavel,
+  .botao-primario {
+    transition: opacity 160ms ease;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .barra-abas {
+    background: var(--papel);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

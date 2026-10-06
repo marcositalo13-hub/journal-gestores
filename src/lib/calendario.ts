@@ -118,3 +118,10 @@ export function parseGrupoMes(titulo: string, cfg: JornalConfig = getConfig()): 
   }
   return null;
 }
+
+/** Data por extenso em PT-BR, ex.: "Terça-feira, 6 de outubro de 2026". */
+export function dataPorExtenso(d: DataISO): string {
+  const [y, m, day] = partes(d);
+  const dia = nomeDiaDaSemana(d);
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)}, ${day} de ${nomeDoMes(m).toLowerCase()} de ${y}`;
+}

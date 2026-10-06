@@ -2,6 +2,7 @@
   "timezone": "America/Sao_Paulo",
   "workspace_id": "17838858",
   "diretor": "Egídio",
+  "leitores": ["egidio.pelucio@brbseguros.com.br", "marcos.porto@brbseguros.com.br"],
   "gestores": [
     {"nome":"Solange Mata","area":"Superintendência de Finanças e Operações","reporta_a":"Egídio","quadro_id":null},
     {"nome":"Solange Mescouto","area":"Gerência Jurídico, Riscos e Compliance","reporta_a":"Solange Mata","quadro_id":null},
