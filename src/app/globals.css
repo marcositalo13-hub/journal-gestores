@@ -151,3 +151,91 @@ body {
     backdrop-filter: none;
   }
 }
+
+/* ---------- Valores ocultos (html[data-ocultar] é aplicado por script antes da pintura) ---------- */
+.valor-oculto {
+  display: none;
+}
+html[data-ocultar] .valor-real {
+  display: none;
+}
+html[data-ocultar] .valor-oculto {
+  display: inline;
+}
+
+/* ---------- Edição: tipografia de jornal ---------- */
+.titulo-secao {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--tinta);
+}
+.kicker {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rotulo-tipo {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tinta-2);
+}
+.rotulo-gestor {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--tinta-2);
+}
+.nome-item {
+  display: block;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.meta-item {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--tinta-2);
+}
+
+/* ---------- Linhas tocáveis: realce imediato no toque (sem movimento) ---------- */
+.linha {
+  min-height: 3.5rem;
+  transition: background-color 100ms ease;
+}
+.linha:active {
+  background-color: var(--papel-alt);
+}
+@media (hover: hover) and (pointer: fine) {
+  .linha:hover {
+    background-color: var(--papel-alt);
+  }
+}
+.linha:focus-visible,
+.celula-dia:focus-visible {
+  outline: 2px solid var(--destaque);
+  outline-offset: -2px;
+}
+
+/* Seletor dos 7 dias: só cor, rápida */
+.celula-dia {
+  transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
+}
+
+/* ---------- Folha de detalhes (vaul): sem movimento com prefers-reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-vaul-drawer],
+  [data-vaul-overlay] {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

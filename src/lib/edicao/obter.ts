@@ -1,5 +1,6 @@
 // Busca dados ao vivo do monday e entrega a edição. Sem fallback: se o monday falhar, lança.
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { hoje } from "../calendario";
 import { lerQuadros } from "../coletor/ler";
 import { getConfig } from "../config";
@@ -37,7 +38,16 @@ export async function buscarItens(): Promise<DadosLidos> {
 // assim ela não "vira" com atraso na virada do dia. (unstable_cache: não exige cacheComponents.)
 const lerComCache = unstable_cache(buscarItens, ["edicao-itens-v2"], { revalidate: 300, tags: ["edicao"] });
 
+// Dedupe por requisição: o cabeçalho e a página pedem a edição na mesma renderização;
+// com o cache frio isso viraria duas leituras simultâneas no monday.
+const lerNaRequisicao = cache(() => lerComCache());
+
+/** Edição para uma data específica (YYYY-MM-DD), com a leitura em cache. */
+export async function obterEdicaoEm(data: string): Promise<Edicao> {
+  const { itens, semPrazo, geradoEm } = await lerNaRequisicao();
+  return montarEdicao(itens, data, getConfig(), geradoEm, semPrazo);
+}
+
 export async function obterEdicao(agora: Date = new Date()): Promise<Edicao> {
-  const { itens, semPrazo, geradoEm } = await lerComCache();
-  return montarEdicao(itens, hoje(agora), getConfig(), geradoEm, semPrazo);
+  return obterEdicaoEm(hoje(agora));
 }

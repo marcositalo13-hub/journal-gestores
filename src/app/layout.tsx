@@ -26,9 +26,15 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
+// Aplica "ocultar valores" antes da primeira pintura (evita mostrar o número real por um instante).
+const SCRIPT_OCULTAR_VALORES = `try{if(localStorage.getItem("pauta:ocultar-valores")==="1")document.documentElement.setAttribute("data-ocultar","")}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="pt-BR" className={newsreader.variable}>
+    <html lang="pt-BR" className={newsreader.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_OCULTAR_VALORES }} />
+      </head>
       <body className="min-h-dvh bg-papel text-tinta">{children}</body>
     </html>
   );

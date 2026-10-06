@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
-import { dataPorExtenso, formatarHoraMinuto, hoje, horaMinuto, saudacao } from "@/lib/calendario";
-import { obterEdicao } from "@/lib/edicao/obter";
+import { Suspense } from "react";
+import { dataPorExtenso, hoje, horaMinuto, saudacao } from "@/lib/calendario";
 import { leitorPorEmail } from "@/lib/config";
 import { criarClienteServidor } from "@/lib/supabase/server";
+import { AlternarValores } from "@/components/pauta/alternar-valores";
+import { Atualizado } from "@/components/pauta/atualizado";
+import { ProvedorDetalhe } from "@/components/pauta/detalhe";
 import { sair } from "../entrar/actions";
 import { BarraAbas } from "./barra-abas";
 
@@ -22,39 +25,41 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const agora = new Date();
   const hora = horaMinuto(agora);
   const dia = hoje(agora);
-  // Horário da última leitura do monday (cache de 5 min). Se o monday falhar, não derrubamos o app:
-  // avisamos no cabeçalho em vez de mostrar uma hora que não é de dados reais.
-  const atualizado = await obterEdicao(agora)
-    .then((e) => formatarHoraMinuto(horaMinuto(new Date(e.geradoEm))))
-    .catch(() => null);
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="topo-seguro border-b border-borda">
-        <div className="mx-auto w-full max-w-[640px] px-5 pb-4">
-          <div className="flex justify-end">
-            <form action={sair}>
-              <button type="submit" className="pressionavel -mr-3 min-h-11 min-w-11 px-3 text-[0.9375rem] text-tinta-2">
-                Sair
-              </button>
-            </form>
+    <ProvedorDetalhe>
+      <div className="flex min-h-dvh flex-col">
+        <header className="topo-seguro border-b border-borda">
+          <div className="mx-auto w-full max-w-[640px] px-5 pb-4">
+            <div className="flex items-center justify-end gap-1">
+              <AlternarValores />
+              <form action={sair}>
+                <button type="submit" className="pressionavel -mr-3 min-h-11 min-w-11 px-3 text-[0.9375rem] text-tinta-2">
+                  Sair
+                </button>
+              </form>
+            </div>
+            <h1 className="titulo-jornal text-[2.1rem] sm:text-[2.55rem]">A Pauta</h1>
+            <p className="mt-3 text-base text-tinta">
+              {saudacao(hora.h)}, {leitor.nome}. Estas são as prioridades de hoje.
+            </p>
+            <p className="mt-1 text-base text-tinta-2">
+              <time dateTime={dia}>{dataPorExtenso(dia)}</time> ·{" "}
+              {/* Suspense: o cabeçalho aparece na hora; a leitura do monday (cache frio ~2 s) não o bloqueia. */}
+              <Suspense fallback={<span>atualizando…</span>}>
+                <Atualizado />
+              </Suspense>
+            </p>
           </div>
-          <h1 className="titulo-jornal text-[2.1rem] sm:text-[2.55rem]">A Pauta</h1>
-          <p className="mt-3 text-base text-tinta">
-            {saudacao(hora.h)}, {leitor.nome}. Estas são as prioridades de hoje.
-          </p>
-          <p className="mt-1 text-base text-tinta-2">
-            <time dateTime={dia}>{dataPorExtenso(dia)}</time> · {atualizado ? `atualizado às ${atualizado}` : "atualização indisponível"}
-          </p>
-        </div>
-      </header>
+        </header>
 
-      {/* espaço para a barra de abas fixa + área segura inferior */}
-      <main className="mx-auto w-full max-w-[640px] flex-1 px-5 pt-6 pb-[calc(var(--altura-abas)+env(safe-area-inset-bottom)+1.5rem)]">
-        {children}
-      </main>
+        {/* espaço para a barra de abas fixa + área segura inferior */}
+        <main className="mx-auto w-full max-w-[640px] flex-1 px-5 pt-6 pb-[calc(var(--altura-abas)+env(safe-area-inset-bottom)+1.5rem)]">
+          {children}
+        </main>
 
-      <BarraAbas />
-    </div>
+        <BarraAbas />
+      </div>
+    </ProvedorDetalhe>
   );
 }
