@@ -71,3 +71,12 @@ describe("dataDeTeste (?data=)", () => {
     expect(dataDeTeste(["2026-10-16", "x"], "development")).toBe("2026-10-16");
   });
 });
+
+describe("dataTitulo", () => {
+  it("dia da semana sem '-feira', mês por extenso", async () => {
+    const { dataTitulo } = await import("./formato");
+    expect(dataTitulo("2026-10-09")).toBe("Sexta, 9 de outubro");
+    expect(dataTitulo("2026-10-12")).toBe("Segunda, 12 de outubro");
+    expect(dataTitulo("2027-03-06")).toBe("Sábado, 6 de março");
+  });
+});

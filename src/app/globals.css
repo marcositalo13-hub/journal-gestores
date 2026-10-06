@@ -117,11 +117,46 @@ body {
 
 /* ---------- Barra de abas (material translúcido estilo iOS) ---------- */
 .barra-abas {
-  background: color-mix(in srgb, var(--papel) 82%, transparent);
+  background: color-mix(in srgb, var(--papel) 90%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid var(--borda);
   padding-bottom: env(safe-area-inset-bottom);
+}
+/* Fio duplo de jornal (tinta por fora, borda por dentro): no topo da barra e sob o cabeçalho. */
+.barra-abas::before,
+.regua-dupla::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 4px;
+  border-top: 1px solid var(--tinta);
+  border-bottom: 1px solid var(--borda);
+  pointer-events: none;
+}
+.barra-abas::before {
+  top: -4px;
+}
+.regua-dupla {
+  position: relative;
+}
+.regua-dupla::after {
+  bottom: 0;
+  border-top-color: var(--borda);
+  border-bottom-color: var(--tinta);
+}
+
+/* Régua de tinta da seleção (dias e abas): desliza só com transform, ≤200ms */
+.regua-tinta {
+  transition: transform 200ms var(--ease-out);
+  will-change: transform;
+}
+.aba:focus-visible,
+.dia-nav:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: -4px;
+}
+.dia-nav {
+  transition: color 150ms ease;
 }
 
 /* ---------- Acessibilidade ---------- */
@@ -141,6 +176,9 @@ body {
   .pressionavel,
   .botao-primario {
     transition: opacity 160ms ease;
+  }
+  .regua-tinta {
+    transition: none;
   }
 }
 
@@ -220,15 +258,9 @@ html[data-ocultar] .valor-oculto {
     background-color: var(--papel-alt);
   }
 }
-.linha:focus-visible,
-.celula-dia:focus-visible {
+.linha:focus-visible {
   outline: 2px solid var(--destaque);
   outline-offset: -2px;
-}
-
-/* Seletor dos 7 dias: só cor, rápida */
-.celula-dia {
-  transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
 }
 
 /* ---------- Folha de detalhes (vaul): sem movimento com prefers-reduced-motion ---------- */

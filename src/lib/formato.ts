@@ -64,3 +64,12 @@ export function tituloAvisoNaoUtil(hoje: DataISO, proximoDiaUtil: DataISO, cfg: 
   }
   return "Antes do fim de semana";
 }
+
+const SEMANA_CURTA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const MES_EXTENSO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** "Sexta, 9 de outubro" (título da lista de um dia). */
+export function dataTitulo(d: DataISO): string {
+  const [, m, dia] = partes(d);
+  return `${SEMANA_CURTA[diaDaSemana(d)]}, ${dia} de ${MES_EXTENSO[m - 1]}`;
+}

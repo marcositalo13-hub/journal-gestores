@@ -29,8 +29,8 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <ProvedorDetalhe>
       <div className="flex min-h-dvh flex-col">
-        <header className="topo-seguro border-b border-borda">
-          <div className="mx-auto w-full max-w-[640px] px-5 pb-4">
+        <header className="topo-seguro regua-dupla">
+          <div className="mx-auto w-full max-w-[640px] px-5 pb-5">
             <div className="flex items-center justify-end gap-1">
               <AlternarValores />
               <form action={sair}>
@@ -44,8 +44,10 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
               {saudacao(hora.h)}, {leitor.nome}. Estas são as prioridades de hoje.
             </p>
             <p className="mt-1 text-base text-tinta-2">
-              <time dateTime={dia}>{dataPorExtenso(dia)}</time> ·{" "}
-              {/* Suspense: o cabeçalho aparece na hora; a leitura do monday (cache frio ~2 s) não o bloqueia. */}
+              <time dateTime={dia}>{dataPorExtenso(dia)}</time>
+            </p>
+            {/* Linha própria (não quebra a data). Suspense: a leitura do monday (cache frio ~2 s) não bloqueia o cabeçalho. */}
+            <p className="mt-1 text-[0.875rem] text-tinta-2">
               <Suspense fallback={<span>atualizando…</span>}>
                 <Atualizado />
               </Suspense>
