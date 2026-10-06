@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { dataPorExtenso, hoje } from "@/lib/calendario";
-import { ehLeitor } from "@/lib/config";
+import { dataPorExtenso, formatarHoraMinuto, hoje, horaMinuto, saudacao } from "@/lib/calendario";
+import { leitorPorEmail } from "@/lib/config";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { sair } from "../entrar/actions";
 import { BarraAbas } from "./barra-abas";
@@ -11,12 +11,16 @@ async function exigirLeitor() {
   const { data } = await supabase.auth.getClaims();
   const email = typeof data?.claims?.email === "string" ? data.claims.email : null;
   if (!email) redirect("/entrar");
-  if (!ehLeitor(email)) redirect("/entrar?erro=nao-autorizado");
+  const leitor = leitorPorEmail(email);
+  if (!leitor) redirect("/entrar?erro=nao-autorizado");
+  return leitor;
 }
 
 export default async function LayoutApp({ children }: LayoutProps<"/">) {
-  await exigirLeitor();
-  const data = dataPorExtenso(hoje());
+  const leitor = await exigirLeitor();
+  const agora = new Date();
+  const hora = horaMinuto(agora);
+  const dia = hoje(agora);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -29,9 +33,13 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
               </button>
             </form>
           </div>
-          <h1 className="titulo-jornal text-[3.5rem] sm:text-[4.25rem]">A Pauta</h1>
-          <p className="mt-2 text-base text-tinta-2">
-            <time dateTime={hoje()}>{data}</time>
+          <h1 className="titulo-jornal text-[2.1rem] sm:text-[2.55rem]">A Pauta</h1>
+          <p className="mt-3 text-base text-tinta">
+            {saudacao(hora.h)}, {leitor.nome}. Estas são as prioridades de hoje.
+          </p>
+          {/* TODO: mostrar o horário da última coleta dos dados quando houver dados ao vivo (hoje é a hora da renderização). */}
+          <p className="mt-1 text-base text-tinta-2">
+            <time dateTime={dia}>{dataPorExtenso(dia)}</time> · atualizado às {formatarHoraMinuto(hora)}
           </p>
         </div>
       </header>

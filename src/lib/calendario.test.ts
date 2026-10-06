@@ -40,3 +40,21 @@ describe("dataPorExtenso", () => {
     expect(dataPorExtenso("2027-03-01")).toBe("Segunda-feira, 1 de março de 2027");
   });
 });
+
+describe("saudação e hora (São Paulo)", () => {
+  it("limites 12h e 18h", async () => {
+    const { saudacao } = await import("./calendario");
+    expect(saudacao(0)).toBe("Bom dia");
+    expect(saudacao(11)).toBe("Bom dia");
+    expect(saudacao(12)).toBe("Boa tarde");
+    expect(saudacao(17)).toBe("Boa tarde");
+    expect(saudacao(18)).toBe("Boa noite");
+    expect(saudacao(23)).toBe("Boa noite");
+  });
+  it("horaMinuto usa America/Sao_Paulo (UTC-3) e formata 09h05", async () => {
+    const { horaMinuto, formatarHoraMinuto } = await import("./calendario");
+    expect(horaMinuto(new Date("2026-10-06T12:05:00Z"))).toEqual({ h: 9, m: 5 });
+    expect(horaMinuto(new Date("2026-10-06T02:30:00Z"))).toEqual({ h: 23, m: 30 });
+    expect(formatarHoraMinuto({ h: 9, m: 5 })).toBe("09h05");
+  });
+});

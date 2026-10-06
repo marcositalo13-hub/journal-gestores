@@ -125,3 +125,20 @@ export function dataPorExtenso(d: DataISO): string {
   const dia = nomeDiaDaSemana(d);
   return `${dia.charAt(0).toUpperCase()}${dia.slice(1)}, ${day} de ${nomeDoMes(m).toLowerCase()} de ${y}`;
 }
+
+/** Hora e minuto atuais no fuso configurado. */
+export function horaMinuto(agora: Date = new Date(), cfg: JornalConfig = getConfig()): { h: number; m: number } {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: cfg.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(agora);
+  const n = (t: string) => Number(p.find((x) => x.type === t)?.value);
+  return { h: n("hour"), m: n("minute") };
+}
+
+/** "Bom dia" antes das 12h, "Boa tarde" antes das 18h, senão "Boa noite". */
+export function saudacao(hora: number): string {
+  return hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+}
+
+/** "09h05" */
+export function formatarHoraMinuto({ h, m }: { h: number; m: number }): string {
+  return `${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}`;
+}

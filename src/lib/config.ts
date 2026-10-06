@@ -4,6 +4,11 @@ export type TipoQuadro = "atividades" | "pagamentos";
 export type TipoColuna = "status" | "date" | "dropdown" | "text" | "numbers";
 export type AjusteDiaNaoUtil = "manter_e_avisar" | "dia_util_mais_proximo";
 
+export interface Leitor {
+  email: string;
+  nome: string;
+}
+
 export interface Gestor {
   nome: string;
   area: string;
@@ -34,8 +39,8 @@ export interface JornalConfig {
   timezone: string;
   workspace_id: string;
   diretor: string;
-  /** e-mails autorizados a entrar no app (comparação em minúsculas) */
-  leitores: string[];
+  /** quem pode entrar no app (e-mail comparado em minúsculas) e o nome usado na saudação */
+  leitores: Leitor[];
   gestores: Gestor[];
   quadros: QuadroConfig[];
   quadros_ignorados: string[];
@@ -99,13 +104,15 @@ export function validarConfig(c: unknown): JornalConfig {
   const leitores = arr("leitores");
   if (Array.isArray(o.leitores) && leitores.length === 0) erros.push(`"leitores" não pode ser vazio`);
   const vistos = new Set<string>();
-  leitores.forEach((e, i) => {
-    if (typeof e !== "string" || !EMAIL_RE.test(e.trim())) {
-      erros.push(`leitores[${i}] não é um e-mail válido: ${String(e)}`);
+  leitores.forEach((l, i) => {
+    const x = (l ?? {}) as Record<string, unknown>;
+    if (typeof x.nome !== "string" || x.nome.trim() === "") erros.push(`leitores[${i}].nome deve ser string não vazia`);
+    if (typeof x.email !== "string" || !EMAIL_RE.test(x.email.trim())) {
+      erros.push(`leitores[${i}].email não é um e-mail válido: ${String(x.email)}`);
       return;
     }
-    const n = e.trim().toLowerCase();
-    if (vistos.has(n)) erros.push(`leitores[${i}] duplicado: ${e}`);
+    const n = x.email.trim().toLowerCase();
+    if (vistos.has(n)) erros.push(`leitores[${i}].email duplicado: ${x.email}`);
     vistos.add(n);
   });
 
@@ -188,9 +195,14 @@ export function getConfig(): JornalConfig {
   return cache;
 }
 
-/** O e-mail está na lista de leitores? (sem diferenciar maiúsculas/minúsculas) */
-export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = getConfig()): boolean {
-  if (!email) return false;
+/** Leitor autorizado para o e-mail (sem diferenciar maiúsculas/minúsculas), ou null. */
+export function leitorPorEmail(email: string | null | undefined, cfg: JornalConfig = getConfig()): Leitor | null {
+  if (!email) return null;
   const e = email.trim().toLowerCase();
-  return cfg.leitores.some((l) => l.trim().toLowerCase() === e);
+  return cfg.leitores.find((l) => l.email.trim().toLowerCase() === e) ?? null;
+}
+
+/** O e-mail está na lista de leitores? */
+export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = getConfig()): boolean {
+  return leitorPorEmail(email, cfg) !== null;
 }
