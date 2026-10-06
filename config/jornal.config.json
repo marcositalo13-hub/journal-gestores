@@ -2,6 +2,7 @@
   "timezone": "America/Sao_Paulo",
   "workspace_id": "17838858",
   "diretor": "Egídio",
+  "coordenacoes": {"Superintendência": "Solange Mata", "Adm. e Financeira": "Keite Martins", "Controladoria": "João Silva", "Contábil e Fiscal": "Graziely Palma"},
   "leitores": [
     {"email": "egidio.pelucio@brbseguros.com.br", "nome": "Egídio"},
     {"email": "marcos.porto@brbseguros.com.br", "nome": "Marcos"}

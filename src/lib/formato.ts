@@ -1,6 +1,5 @@
 // Formatação PT-BR para a interface. Funções puras.
-import { diaDaSemana, ehDiaUtil, partes, somarDias, type DataISO } from "./calendario";
-import type { JornalConfig } from "./config";
+import { diaDaSemana, partes, type DataISO } from "./datas";
 
 const SEMANA_ABREV = ["dom.", "seg.", "ter.", "qua.", "qui.", "sex.", "sáb."];
 const SEMANA_INICIAL = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -54,15 +53,6 @@ export function etapasTexto(e: { total: number; concluidas: number }): string {
 /** "2 itens sem prazo" */
 export function semPrazoTexto(n: number): string {
   return `${contagem(n, "item", "itens")} sem prazo`;
-}
-
-/** "Antes do feriado" se algum dia entre hoje e o próximo dia útil (exclusivos) é feriado/facultativo; senão "Antes do fim de semana". */
-export function tituloAvisoNaoUtil(hoje: DataISO, proximoDiaUtil: DataISO, cfg: JornalConfig): string {
-  for (let d = somarDias(hoje, 1); d < proximoDiaUtil; d = somarDias(d, 1)) {
-    const diaSemana = diaDaSemana(d);
-    if (diaSemana !== 0 && diaSemana !== 6 && !ehDiaUtil(d, cfg)) return "Antes do feriado";
-  }
-  return "Antes do fim de semana";
 }
 
 const SEMANA_CURTA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];

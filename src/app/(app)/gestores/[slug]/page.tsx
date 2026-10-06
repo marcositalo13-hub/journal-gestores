@@ -12,6 +12,8 @@ import { montarCaderno, slugDe } from "@/lib/edicao/caderno";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import { obterItens } from "@/lib/edicao/obter";
 import { dataCurta, etapasTexto, haDias } from "@/lib/formato";
+import { mensagemCaderno, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
+import { BotaoWhatsapp } from "@/components/pauta/botao-whatsapp";
 
 export async function generateMetadata({ params }: PageProps<"/gestores/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -37,7 +39,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
   const c = nome ? montarCaderno(dados.itens, dados.semPrazo, simulada ?? hoje(), cfg, nome, comEquipe) : null;
   if (!c) notFound();
 
-  const verDono = c.incluiEquipe;
+  const whatsapp = cfg.gestores.find((g) => g.nome === c.gestor.nome)?.whatsapp;
   const vazio = [c.atrasados, c.travados, c.hoje, c.proximos14, c.semPrazo].every((x) => x.length === 0);
   const pct = c.mes.total > 0 ? (c.mes.concluidos / c.mes.total) * 100 : 0;
 
@@ -57,6 +59,13 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
         <h2 className="titulo-jornal text-[2rem] leading-[1.1]">{c.gestor.nome}</h2>
         {c.gestor.area && <p className="mt-1.5 text-base text-tinta-2">{c.gestor.area}</p>}
         <p className="mt-0.5 text-[0.9375rem] text-tinta-2">{c.gestor.reportaA ? `Reporta a ${c.gestor.reportaA}` : "Fora da estrutura"}</p>
+        {whatsapp && (
+          <BotaoWhatsapp
+            className="mt-5"
+            primeiroNome={primeiroNome(c.gestor.nome)}
+            href={urlWhatsapp(whatsapp, mensagemCaderno(primeiroNome(c.gestor.nome)))}
+          />
+        )}
         {c.temEquipe && <AlternarEquipe primeiroNome={c.gestor.nome.split(" ")[0]} comEquipe={c.incluiEquipe} />}
       </header>
 
@@ -88,7 +97,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
                 <ConteudoLinha
                   item={item}
                   mostrarTipo={false}
-                  meta={<MetaItem item={item} dono={verDono} extras={[`prazo ${dataCurta(item.data)}`]} />}
+                  meta={<MetaItem item={item} extras={[`prazo ${dataCurta(item.data)}`]} />}
                   direita={<span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-alerta">{haDias(diasAtraso)}</span>}
                 />
               </LinhaItem>
@@ -108,12 +117,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
                   meta={
                     <>
                       {motivo ?? "Sem motivo informado"}
-                      {(item.etapas || verDono) && (
-                        <>
-                          <br />
-                          <MetaItem item={item} dono={verDono} extras={item.etapas ? [etapasTexto(item.etapas)] : []} />
-                        </>
-                      )}
+                      <br />
+                      <MetaItem item={item} extras={item.etapas ? [etapasTexto(item.etapas)] : []} />
                     </>
                   }
                   direita={<PillStatus categoria="travado" status="Travado" />}
@@ -129,7 +134,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
           <ul>
             {c.hoje.map((item) => (
               <LinhaItem key={item.id} item={item}>
-                <ConteudoLinha item={item} meta={<MetaItem item={item} dono={verDono} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
               </LinhaItem>
             ))}
           </ul>
@@ -147,7 +152,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
               <ul>
                 {d.itens.map((item) => (
                   <LinhaItem key={item.id} item={item}>
-                    <ConteudoLinha item={item} meta={<MetaItem item={item} dono={verDono} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+                    <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
                   </LinhaItem>
                 ))}
               </ul>
@@ -161,7 +166,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
           <ul>
             {c.semPrazo.map((item) => (
               <LinhaItem key={item.id} item={item}>
-                <ConteudoLinha item={item} meta={<MetaItem item={item} dono={verDono} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
               </LinhaItem>
             ))}
           </ul>

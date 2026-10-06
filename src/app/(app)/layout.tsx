@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { dataPorExtenso, hoje, horaMinuto, saudacao } from "@/lib/calendario";
-import { leitorPorEmail } from "@/lib/config";
+import { getConfig, leitorPorEmail } from "@/lib/config";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { AlternarValores } from "@/components/pauta/alternar-valores";
 import { Atualizado } from "@/components/pauta/atualizado";
@@ -25,9 +25,10 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const agora = new Date();
   const hora = horaMinuto(agora);
   const dia = hoje(agora);
+  const diretorio = Object.fromEntries(getConfig().gestores.map((g) => [g.nome, { area: g.area, whatsapp: g.whatsapp }]));
 
   return (
-    <ProvedorDetalhe>
+    <ProvedorDetalhe gestores={diretorio}>
       <div className="flex min-h-dvh flex-col">
         <header className="topo-seguro regua-dupla">
           <div className="mx-auto w-full max-w-[640px] px-5 pb-5">

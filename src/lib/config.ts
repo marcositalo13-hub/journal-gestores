@@ -21,6 +21,8 @@ export interface Gestor {
   area: string;
   reporta_a: string;
   quadro_id: string | null;
+  /** WhatsApp só com dígitos, com código do país (ex.: "5561999999999"); opcional */
+  whatsapp?: string;
 }
 
 export interface QuadroConfig {
@@ -46,6 +48,8 @@ export interface JornalConfig {
   timezone: string;
   workspace_id: string;
   diretor: string;
+  /** coordenação (rótulo da coluna dos Pagamentos) → nome do gestor que responde por ela */
+  coordenacoes: Record<string, string>;
   /** quem pode entrar no app (e-mail comparado em minúsculas) e o nome usado na saudação */
   leitores: Leitor[];
   gestores: Gestor[];
@@ -130,7 +134,18 @@ export function validarConfig(c: unknown): JornalConfig {
       if (typeof x?.[k] !== "string") erros.push(`gestores[${i}].${k} deve ser string`);
     }
     if (!(x?.quadro_id === null || typeof x?.quadro_id === "string")) erros.push(`gestores[${i}].quadro_id deve ser string ou null`);
+    if (x?.whatsapp !== undefined && !(typeof x.whatsapp === "string" && /^\d{10,15}$/.test(x.whatsapp))) {
+      erros.push(`gestores[${i}].whatsapp deve ter só dígitos (10 a 15), com código do país, ex.: "5561999999999"`);
+    }
   });
+
+  const nomesGestores = new Set(arr("gestores").map((g) => (g as Record<string, unknown>)?.nome));
+  if (typeof o.coordenacoes !== "object" || o.coordenacoes === null || Array.isArray(o.coordenacoes)) erros.push(`"coordenacoes" deve ser objeto { coordenação: gestor }`);
+  else {
+    for (const [coord, gestor] of Object.entries(o.coordenacoes as Record<string, unknown>)) {
+      if (typeof gestor !== "string" || !nomesGestores.has(gestor)) erros.push(`coordenacoes["${coord}"] deve ser o nome de um gestor do config: ${String(gestor)}`);
+    }
+  }
 
   const ignorados = arr("quadros_ignorados");
   ignorados.forEach((q, i) => {
@@ -226,4 +241,13 @@ export function leitorPorEmail(email: string | null | undefined, cfg: JornalConf
 /** O e-mail está na lista de leitores? */
 export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = getConfig()): boolean {
   return leitorPorEmail(email, cfg) !== null;
+}
+
+/** Gestor que responde por uma coordenação dos Pagamentos (primeiro rótulo conhecido), ou null. */
+export function gestorDaCoordenacao(rotulos: string[] | null | undefined, cfg: JornalConfig = getConfig()): string | null {
+  for (const r of rotulos ?? []) {
+    const g = cfg.coordenacoes[r.trim()];
+    if (g) return g;
+  }
+  return null;
 }

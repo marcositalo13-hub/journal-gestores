@@ -23,13 +23,14 @@ export function LinhaItem({ item, children }: { item: ItemEdicao; children: Reac
   );
 }
 
-/** Linha de apoio: partes separadas por " · ", com o dono (modo equipe) e o valor (respeita ocultar valores). */
-export function MetaItem({ item, dono, extras = [] }: { item: ItemEdicao; dono?: boolean; extras?: ReactNode[] }) {
-  const partes: ReactNode[] = [];
-  if (dono) partes.push(item.dono);
-  partes.push(...extras);
+/**
+ * Linha de apoio, sempre começando por quem responde (o gestor): "{gestor} · {extras} · exec. {executor} · {valor}".
+ * Pagamentos: "{gestor} · {valor}". O valor respeita "ocultar valores".
+ */
+export function MetaItem({ item, extras = [] }: { item: ItemEdicao; extras?: ReactNode[] }) {
+  const partes: ReactNode[] = [item.dono, ...extras];
+  if (item.responsavel) partes.push(`exec. ${item.responsavel}`);
   if (typeof item.valor === "number") partes.push(<Valor valor={item.valor} />);
-  if (!partes.length) return null;
   return (
     <>
       {partes.map((p, i) => (

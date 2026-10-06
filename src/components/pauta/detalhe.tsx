@@ -4,7 +4,10 @@ import { X } from "lucide-react";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import type { ItemEdicao } from "@/lib/edicao/itens";
+import { cn } from "@/lib/utils";
 import { dataCurta, etapasTexto } from "@/lib/formato";
+import { mensagemItem, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
+import { BotaoWhatsapp } from "./botao-whatsapp";
 import { PillStatus } from "./pill-status";
 import { Valor } from "./valor";
 
@@ -20,7 +23,10 @@ export function useDetalhe(): ContextoDetalhe {
 }
 
 /** Um único painel de detalhes para o app inteiro (Hoje e Gestores). */
-export function ProvedorDetalhe({ children }: { children: ReactNode }) {
+/** Dados mínimos dos gestores para a folha (vêm do servidor; o config inteiro não vai para o cliente). */
+export type DiretorioGestores = Record<string, { area: string | null; whatsapp?: string }>;
+
+export function ProvedorDetalhe({ children, gestores }: { children: ReactNode; gestores: DiretorioGestores }) {
   const [item, setItem] = useState<ItemEdicao | null>(null);
   const [aberto, setAberto] = useState(false);
 
@@ -33,7 +39,7 @@ export function ProvedorDetalhe({ children }: { children: ReactNode }) {
   return (
     <Contexto.Provider value={valor}>
       {children}
-      <FolhaDetalhe item={item} aberto={aberto} onAberto={setAberto} />
+      <FolhaDetalhe item={item} aberto={aberto} onAberto={setAberto} gestores={gestores} />
     </Contexto.Provider>
   );
 }
@@ -47,7 +53,8 @@ function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   );
 }
 
-function FolhaDetalhe({ item, aberto, onAberto }: { item: ItemEdicao | null; aberto: boolean; onAberto: (v: boolean) => void }) {
+function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao | null; aberto: boolean; onAberto: (v: boolean) => void; gestores: DiretorioGestores }) {
+  const gestor = item ? gestores[item.dono] : undefined;
   return (
     <Drawer open={aberto} onOpenChange={onAberto}>
       <DrawerContent>
@@ -70,14 +77,18 @@ function FolhaDetalhe({ item, aberto, onAberto }: { item: ItemEdicao | null; abe
               <DrawerDescription className="sr-only">Detalhes do item selecionado.</DrawerDescription>
             </DrawerHeader>
 
-            <dl className="overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+            <dl className={cn("overflow-y-auto overscroll-contain px-5", !gestor?.whatsapp && "pb-[calc(env(safe-area-inset-bottom)+1.5rem)]")}>
               <Campo rotulo={"dataHerdada" in item && item.dataHerdada ? "Prazo da última etapa" : "Prazo"}>
                 {item.data ? dataCurta(item.data) : <span className="text-alerta">Sem prazo definido</span>}
               </Campo>
               <Campo rotulo="Status">
                 <PillStatus categoria={item.categoria} status={item.status} />
               </Campo>
-              {item.responsavel && <Campo rotulo="Responsável">{item.responsavel}</Campo>}
+              <Campo rotulo="Responde">
+                {item.dono}
+                {gestor?.area && <span className="text-tinta-2"> ({gestor.area})</span>}
+              </Campo>
+              {item.responsavel && <Campo rotulo="Executor">{item.responsavel}</Campo>}
               {item.observacao && <Campo rotulo="Observação">{item.observacao}</Campo>}
               {item.recorrencia && <Campo rotulo="Recorrência">{item.recorrencia}</Campo>}
               {typeof item.valor === "number" && (
@@ -104,6 +115,15 @@ function FolhaDetalhe({ item, aberto, onAberto }: { item: ItemEdicao | null; abe
                 </Campo>
               )}
             </dl>
+
+            {gestor?.whatsapp && (
+              <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
+                <BotaoWhatsapp
+                  primeiroNome={primeiroNome(item.dono)}
+                  href={urlWhatsapp(gestor.whatsapp, mensagemItem(item, primeiroNome(item.dono)))}
+                />
+              </div>
+            )}
           </>
         )}
       </DrawerContent>

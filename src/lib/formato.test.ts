@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { tituloAvisoNaoUtil } from "./calendario";
 import { getConfig } from "./config";
 import { dataDeTeste } from "./edicao/data-dev";
-import { contagem, dataCurta, etapasTexto, haDias, inicialDoDia, moeda, numeroDoDia, plural, semPrazoTexto, tituloAvisoNaoUtil, venceEm } from "./formato";
+import { contagem, dataCurta, etapasTexto, haDias, inicialDoDia, moeda, numeroDoDia, plural, semPrazoTexto, venceEm } from "./formato";
 
 const cfg = getConfig();
 

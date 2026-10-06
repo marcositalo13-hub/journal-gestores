@@ -1,7 +1,7 @@
 // Transforma a leitura dos quadros (ler.ts) em itens prontos para montar a edição.
 // Puro: sem rede. Nunca expõe URLs do monday.
 import { parseGrupoMes } from "../calendario";
-import { getConfig, type JornalConfig, type TipoQuadro } from "../config";
+import { getConfig, gestorDaCoordenacao, type JornalConfig, type TipoQuadro } from "../config";
 import { parseFrequencia } from "../recorrencia";
 import type { ItemNormalizado, QuadroLido } from "../coletor/ler";
 
@@ -67,6 +67,18 @@ function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
 }
 
+/** Rótulos da coluna Coordenação (dropdown), com fallback para o texto. */
+export function rotulosDaCoordenacao(v: { labels: string[] | null; text: string } | null | undefined): string[] {
+  if (!v) return [];
+  return v.labels?.length ? v.labels : v.text ? v.text.split(",").map((x) => x.trim()).filter(Boolean) : [];
+}
+
+/** Quem responde: nos Pagamentos, o gestor da coordenação; sem coordenação (ou desconhecida), o dono do quadro. */
+export function donoDoItem(it: ItemNormalizado, q: Pick<QuadroLido, "tipo" | "dono">, cfg: JornalConfig = getConfig()): string {
+  if (q.tipo !== "pagamentos") return q.dono;
+  return gestorDaCoordenacao(rotulosDaCoordenacao(it.valores["Coordenação"]), cfg) ?? q.dono;
+}
+
 const txt = (v: string | null | undefined) => (v && v.trim() ? v.trim() : undefined);
 
 /** Data do item; se estiver vazia, a mais recente entre os subitens não cancelados. */
@@ -90,7 +102,7 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         nome: it.nome,
         quadroId: q.id,
         tipoQuadro: q.tipo,
-        dono: q.dono,
+        dono: donoDoItem(it, q, cfg),
         tipo: tipoDoItem(it, q.tipo),
         status: it.status,
         categoria: categoriaDoStatus(it.status, q.tipo, cfg),

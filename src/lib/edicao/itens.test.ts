@@ -98,7 +98,7 @@ describe("campos copiados", () => {
     expect(i).toMatchObject({
       quadroId: "100",
       tipoQuadro: "pagamentos",
-      dono: "Solange Mata",
+      dono: "Keite Martins", // coordenação "Adm. e Financeira"
       data: "2026-10-10",
       status: "Pago",
       categoria: "concluido",

@@ -1,5 +1,5 @@
 import { parseGrupoMes } from "../calendario";
-import { getConfig, type JornalConfig, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
+import { getConfig, gestorDaCoordenacao, type JornalConfig, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
 import { mondayQuery } from "../monday/client";
 
 // ---------- tipos crus da API ----------
@@ -56,6 +56,7 @@ export interface Aviso {
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
     | "prazo_movido_para_subitens"
+    | "pagamento_sem_coordenacao"
     | "recorrencia_desconhecida"
     | "chave_duplicada"
     | "grupo_desconhecido"
@@ -259,6 +260,19 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     }
     if (n.noCadastro && idPorTitulo["Recorrência"] && vazio(n.recorrencia)) {
       av({ ...ctx, codigo: "cadastro_sem_recorrencia", mensagem: `"${n.nome}": item do Cadastro sem "Recorrência".` });
+    }
+    if (qc.tipo === "pagamentos" && idPorTitulo["Coordenação"]) {
+      const v = valores["Coordenação"];
+      const rotulos = v?.labels?.length ? v.labels : v?.text ? v.text.split(",").map((x) => x.trim()).filter(Boolean) : [];
+      if (!gestorDaCoordenacao(rotulos, cfg)) {
+        av({
+          ...ctx,
+          codigo: "pagamento_sem_coordenacao",
+          mensagem: rotulos.length
+            ? `"${n.nome}": coordenação "${rotulos.join(", ")}" não está em config.coordenacoes; o item ficará com o dono do quadro (${qc.dono}).`
+            : `"${n.nome}": pagamento sem coordenação; o item ficará com o dono do quadro (${qc.dono}).`,
+        });
+      }
     }
     if (!n.noCadastro && !n.data && n.datasSubitens.length) {
       av({

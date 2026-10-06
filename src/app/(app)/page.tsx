@@ -5,15 +5,15 @@ import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { Manchete } from "@/components/pauta/manchete";
 import { PillStatus } from "@/components/pauta/pill-status";
+import { MetaItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
-import { Valor } from "@/components/pauta/valor";
-import { dataPorExtenso, ehDiaUtil } from "@/lib/calendario";
+import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import type { ItemEdicao } from "@/lib/edicao/itens";
 import type { DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
-import { contagem, dataCurta, dataTitulo, etapasTexto, haDias, semPrazoTexto, tituloAvisoNaoUtil } from "@/lib/formato";
+import { contagem, dataCurta, dataTitulo, etapasTexto, haDias, semPrazoTexto } from "@/lib/formato";
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -49,17 +49,7 @@ function ListaDoDia({ dia }: { dia: DiaSemana }) {
             <Linha key={item.id} item={item}>
               <ConteudoLinha
                 item={item}
-                meta={
-                  <>
-                    {item.dono}
-                    {typeof item.valor === "number" && (
-                      <>
-                        {" · "}
-                        <Valor valor={item.valor} />
-                      </>
-                    )}
-                  </>
-                }
+                meta={<MetaItem item={item} />}
                 direita={<PillStatus categoria={item.categoria} status={item.status} />}
               />
             </Linha>
@@ -127,14 +117,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                       <Linha key={item.id} item={item}>
                         <ConteudoLinha
                           item={item}
-                          meta={
-                            typeof item.valor === "number" ? (
-                              <>
-                                <Valor valor={item.valor} />
-                                {item.favorecido && ` · ${item.favorecido}`}
-                              </>
-                            ) : undefined
-                          }
+                          meta={<MetaItem item={item} />}
                           direita={<PillStatus categoria={item.categoria} status={item.status} />}
                         />
                       </Linha>
@@ -153,7 +136,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                     <ConteudoLinha
                       item={item}
                       mostrarTipo={false}
-                      meta={`${item.dono} · prazo ${dataCurta(item.data)}`}
+                      meta={<MetaItem item={item} extras={[`prazo ${dataCurta(item.data)}`]} />}
                       direita={<span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-alerta">{haDias(diasAtraso)}</span>}
                     />
                   </Linha>
@@ -173,12 +156,8 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                       meta={
                         <>
                           {motivo ?? "Sem motivo informado"}
-                          {item.etapas && (
-                            <>
-                              <br />
-                              {etapasTexto(item.etapas)}
-                            </>
-                          )}
+                          <br />
+                          <MetaItem item={item} extras={item.etapas ? [etapasTexto(item.etapas)] : []} />
                         </>
                       }
                       direita={<PillStatus categoria="travado" status="Travado" />}
@@ -202,7 +181,9 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                       <span className="block min-w-0 flex-1 py-3">
                         <span className="block text-[0.9375rem] font-semibold text-aviso">{rotulo}</span>
                         <span className="nome-item">{item.nome}</span>
-                        <span className="meta-item">{item.dono}</span>
+                        <span className="meta-item">
+                      <MetaItem item={item} />
+                    </span>
                       </span>
                     </BotaoItem>
                   </li>
