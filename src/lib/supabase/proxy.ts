@@ -20,6 +20,14 @@ function redirecionar(request: NextRequest, base: NextResponse, destino: string)
   return r;
 }
 
+/** Para /api/*: 401 em JSON (nunca redireciona), preservando cookies/headers do Supabase. */
+function negarApi(base: NextResponse) {
+  const r = NextResponse.json({ erro: "não autorizado" }, { status: 401 });
+  base.cookies.getAll().forEach((c) => r.cookies.set(c));
+  r.headers.set("Cache-Control", "private, no-store");
+  return r;
+}
+
 /**
  * Renova a sessão a cada requisição e aplica as regras de acesso:
  * sem sessão → /entrar; e-mail fora de config.leitores → sai e vai para /entrar?erro=nao-autorizado.
@@ -46,12 +54,15 @@ export async function atualizarSessao(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const email = typeof data?.claims?.email === "string" ? data.claims.email : null;
   const naEntrada = request.nextUrl.pathname === PAGINA_ENTRAR;
+  const ehApi = request.nextUrl.pathname.startsWith("/api/");
 
   if (!email) {
+    if (ehApi) return negarApi(response);
     return naEntrada ? response : redirecionar(request, response, PAGINA_ENTRAR);
   }
   if (!ehLeitor(email)) {
     await supabase.auth.signOut({ scope: "local" });
+    if (ehApi) return negarApi(response);
     return redirecionar(request, response, `${PAGINA_ENTRAR}?erro=nao-autorizado`);
   }
   if (naEntrada) return redirecionar(request, response, "/");

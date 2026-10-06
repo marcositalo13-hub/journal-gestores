@@ -17,6 +17,10 @@ interface ValorApi {
   number?: number | null;
   values?: { label: string }[] | null;
 }
+interface SubitemApi {
+  id: string;
+  column_values: (ValorApi & { column?: { title: string } | null })[];
+}
 interface ItemApi {
   id: string;
   name: string;
@@ -24,6 +28,7 @@ interface ItemApi {
   updated_at: string;
   group: { id: string; title: string } | null;
   column_values: ValorApi[];
+  subitems?: SubitemApi[] | null;
 }
 interface PaginaApi {
   cursor: string | null;
@@ -88,6 +93,8 @@ export interface ItemNormalizado {
   recorrencia: string | null;
   chave: string | null;
   motivo: string | null;
+  /** progresso dos subitens (cancelados não contam); null se não há subitens */
+  etapas: { total: number; concluidas: number } | null;
 }
 
 export interface QuadroLido {
@@ -114,7 +121,8 @@ const ITEM_FIELDS = `
     ... on DateValue { date }
     ... on NumbersValue { number }
     ... on DropdownValue { values { label } }
-  }`;
+  }
+  subitems { id column_values { id text column { title } ... on StatusValue { label } } }`;
 
 const Q_QUADRO = `
 query ($ids: [ID!]) {
@@ -232,6 +240,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       recorrencia: txt("Recorrência"),
       chave: txt("Chave"),
       motivo: txt(tipoCfg.campo_motivo),
+      etapas: contarEtapas(it.subitems ?? [], tipoCfg.status, tipoCfg.status_concluido, tipoCfg.status_cancelado),
     };
 
     const ctx = { itemId: n.id, itemNome: n.nome };
@@ -272,6 +281,25 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     itens,
     avisos,
   };
+}
+
+/** Conta subitens pelo status (coluna localizada pelo TÍTULO, como no resto do coletor). */
+export function contarEtapas(
+  subitens: SubitemApi[],
+  tituloStatus: string,
+  statusConcluido: string,
+  statusCancelado: string,
+): { total: number; concluidas: number } | null {
+  let total = 0;
+  let concluidas = 0;
+  for (const s of subitens) {
+    const v = s.column_values.find((c) => c.column?.title?.trim() === tituloStatus);
+    const label = (v?.label ?? v?.text ?? "").trim();
+    if (label === statusCancelado) continue;
+    total++;
+    if (label === statusConcluido) concluidas++;
+  }
+  return total > 0 ? { total, concluidas } : null;
 }
 
 /** A API não devolve os grupos na ordem do quadro; ordena por `position`. */

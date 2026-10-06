@@ -142,3 +142,26 @@ export function saudacao(hora: number): string {
 export function formatarHoraMinuto({ h, m }: { h: number; m: number }): string {
   return `${String(h).padStart(2, "0")}h${String(m).padStart(2, "0")}`;
 }
+
+/** Primeiro dia útil estritamente depois de d. */
+export function proximoDiaUtil(d: DataISO, cfg: JornalConfig = getConfig()): DataISO {
+  for (let k = 1; k <= 366; k++) {
+    const x = somarDias(d, k);
+    if (ehDiaUtil(x, cfg)) return x;
+  }
+  throw new Error(`Nenhum dia útil encontrado depois de ${d}`);
+}
+
+/** Dias corridos de a até b (negativo se b < a). */
+export function diasEntre(a: DataISO, b: DataISO): number {
+  const [ay, am, ad] = partes(a);
+  const [by, bm, bd] = partes(b);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+}
+
+const DIAS_ABREV_PT = ["dom.", "seg.", "ter.", "qua.", "qui.", "sex.", "sáb."];
+
+/** Rótulo curto de um dia, ex.: "sáb. 10/10". */
+export function rotuloDia(d: DataISO): string {
+  return `${DIAS_ABREV_PT[diaDaSemana(d)]} ${ddmm(d)}`;
+}

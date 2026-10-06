@@ -58,3 +58,15 @@ describe("saudação e hora (São Paulo)", () => {
     expect(formatarHoraMinuto({ h: 9, m: 5 })).toBe("09h05");
   });
 });
+
+describe("proximoDiaUtil / diasEntre / rotuloDia", () => {
+  it("pula fim de semana e feriado (seg 12/10/2026)", async () => {
+    const { proximoDiaUtil, diasEntre, rotuloDia } = await import("./calendario");
+    expect(proximoDiaUtil("2026-10-09")).toBe("2026-10-13");
+    expect(proximoDiaUtil("2026-10-06")).toBe("2026-10-07");
+    expect(diasEntre("2026-10-05", "2026-10-06")).toBe(1);
+    expect(diasEntre("2026-10-06", "2026-10-01")).toBe(-5);
+    expect(diasEntre("2026-12-31", "2027-01-02")).toBe(2);
+    expect(rotuloDia("2026-10-10")).toBe("sáb. 10/10");
+  });
+});

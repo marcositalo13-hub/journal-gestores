@@ -9,6 +9,13 @@ export interface Leitor {
   nome: string;
 }
 
+export interface Manchete {
+  /** valor (R$) a partir do qual um pagamento pode virar manchete */
+  pagamento_relevante_a_partir_de: number;
+  pagamento_antecedencia_dias: number;
+  contrato_antecedencia_dias: number;
+}
+
 export interface Gestor {
   nome: string;
   area: string;
@@ -49,6 +56,7 @@ export interface JornalConfig {
   tipos_de_quadro: Record<TipoQuadro, TipoQuadroConfig>;
   empate_dia_util: "anterior" | "posterior";
   considerar_facultativos_como_nao_util: boolean;
+  manchete: Manchete;
   feriados: string[];
   facultativos: string[];
 }
@@ -177,6 +185,19 @@ export function validarConfig(c: unknown): JornalConfig {
 
   if (o.empate_dia_util !== "anterior" && o.empate_dia_util !== "posterior") erros.push(`"empate_dia_util" deve ser "anterior" ou "posterior"`);
   if (typeof o.considerar_facultativos_como_nao_util !== "boolean") erros.push(`"considerar_facultativos_como_nao_util" deve ser boolean`);
+  const mc = (o.manchete ?? {}) as Record<string, unknown>;
+  if (typeof o.manchete !== "object" || o.manchete === null) erros.push(`"manchete" deve ser objeto`);
+  else {
+    const num = (k: string, inteiro: boolean) => {
+      const v = mc[k];
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || (inteiro && !Number.isInteger(v))) {
+        erros.push(`manchete.${k} deve ser número ${inteiro ? "inteiro " : ""}>= 0`);
+      }
+    };
+    num("pagamento_relevante_a_partir_de", false);
+    num("pagamento_antecedencia_dias", true);
+    num("contrato_antecedencia_dias", true);
+  }
   for (const k of ["feriados", "facultativos"]) {
     arr(k).forEach((d, i) => {
       if (!ehDataValida(d)) erros.push(`${k}[${i}] não é data YYYY-MM-DD válida: ${String(d)}`);
