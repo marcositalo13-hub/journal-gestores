@@ -15,8 +15,10 @@ export interface ItemJornal {
   tipoQuadro: TipoQuadro;
   dono: string;
   tipo: TipoItem;
-  /** YYYY-MM-DD, como está no monday */
+  /** YYYY-MM-DD, como está no monday (ou herdada dos subitens: veja dataHerdada) */
   data: string;
+  /** true quando o item pai estava sem data e usamos a mais recente entre os subitens */
+  dataHerdada?: true;
   /** rótulo cru do status */
   status: string | null;
   categoria: Categoria;
@@ -29,6 +31,17 @@ export interface ItemJornal {
   chave?: string;
   etapas?: { total: number; concluidas: number };
   updatedAt: string;
+}
+
+/** Item sem nenhuma data (nem nos subitens): nunca some, aparece em semPrazo. */
+export type ItemSemPrazo = Omit<ItemJornal, "data" | "dataHerdada"> & { data: null };
+
+/** Qualquer item que pode aparecer na edição. */
+export type ItemEdicao = ItemJornal | ItemSemPrazo;
+
+export interface ItensJornal {
+  itens: ItemJornal[];
+  semPrazo: ItemSemPrazo[];
 }
 
 const TIPOS_ITEM: TipoItem[] = ["Atividade", "Entrega", "Contrato", "Pagamento"];
@@ -50,29 +63,35 @@ function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro): TipoItem {
 
 /** O item entra na edição? Ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro. */
 function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
-  if (!it.data) return false;
   if (it.noCadastro) return parseFrequencia(it.recorrencia) === "nao_recorrente"; // regras recorrentes já têm ocorrências
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
 }
 
 const txt = (v: string | null | undefined) => (v && v.trim() ? v.trim() : undefined);
 
-export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = getConfig()): ItemJornal[] {
-  const out: ItemJornal[] = [];
+/** Data do item; se estiver vazia, a mais recente entre os subitens não cancelados. */
+function dataDoItem(it: ItemNormalizado): { data: string | null; herdada: boolean } {
+  if (it.data) return { data: it.data, herdada: false };
+  const ultima = [...it.datasSubitens].sort().at(-1);
+  return ultima ? { data: ultima, herdada: true } : { data: null, herdada: false };
+}
+
+export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = getConfig()): ItensJornal {
+  const itens: ItemJornal[] = [];
+  const semPrazo: ItemSemPrazo[] = [];
   for (const q of quadros) {
     const tcfg = cfg.tipos_de_quadro[q.tipo];
     for (const it of q.itens) {
       if (!entra(it, cfg)) continue;
       const valor = it.valores["Valor (R$)"]?.number;
       const coordenacao = it.valores["Coordenação"]?.labels?.join(", ") || it.valores["Coordenação"]?.text;
-      out.push({
+      const base = {
         id: it.id,
         nome: it.nome,
         quadroId: q.id,
         tipoQuadro: q.tipo,
         dono: q.dono,
         tipo: tipoDoItem(it, q.tipo),
-        data: it.data!,
         status: it.status,
         categoria: categoriaDoStatus(it.status, q.tipo, cfg),
         ...(typeof valor === "number" ? { valor } : {}),
@@ -84,8 +103,11 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         ...(txt(it.chave) ? { chave: txt(it.chave) } : {}),
         ...(it.etapas ? { etapas: it.etapas } : {}),
         updatedAt: it.updatedAt,
-      });
+      };
+      const { data, herdada } = dataDoItem(it);
+      if (data) itens.push({ ...base, data, ...(herdada ? { dataHerdada: true as const } : {}) });
+      else semPrazo.push({ ...base, data: null });
     }
   }
-  return out;
+  return { itens, semPrazo };
 }

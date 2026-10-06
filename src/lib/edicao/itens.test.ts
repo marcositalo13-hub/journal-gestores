@@ -21,9 +21,11 @@ function item(o: Omit<Partial<ItemNormalizado>, "grupo"> & { grupo?: string }): 
     chave: null,
     motivo: null,
     etapas: null,
+    datasSubitens: [],
     ...resto,
   };
 }
+const itensDe = (qs: QuadroLido[]) => montarItensJornal(qs).itens;
 const quadro = (tipo: QuadroLido["tipo"], itens: ItemNormalizado[], dono = "Solange Mata"): QuadroLido => ({
   id: tipo === "pagamentos" ? "100" : "200",
   nome: "Q",
@@ -44,12 +46,12 @@ describe("montarItensJornal — quais itens entram", () => {
     const semRec = item({ nome: "sem recorrência", grupo: "Cadastro", recorrencia: null });
     const semData = item({ nome: "sem data", data: null });
     const desconhecido = item({ nome: "desconhecido", grupo: "Novo grupo" });
-    const out = montarItensJornal([quadro("pagamentos", [noMes, avulso, regra, semRec, semData, desconhecido])]);
+    const out = itensDe([quadro("pagamentos", [noMes, avulso, regra, semRec, semData, desconhecido])]);
     expect(out.map((i) => i.nome)).toEqual(["no mês", "avulso"]);
   });
 
   it("nunca expõe URLs do monday", () => {
-    const out = montarItensJornal([quadro("pagamentos", [item({})])]);
+    const out = itensDe([quadro("pagamentos", [item({})])]);
     expect(JSON.stringify(out)).not.toMatch(/monday\.com|https?:/);
   });
 });
@@ -65,20 +67,20 @@ describe("categoria e tipo", () => {
   });
 
   it("pagamentos → 'Pagamento'; atividades usa a coluna Tipo (padrão 'Atividade')", () => {
-    const [p] = montarItensJornal([quadro("pagamentos", [item({})])]);
+    const [p] = itensDe([quadro("pagamentos", [item({})])]);
     expect(p.tipo).toBe("Pagamento");
     const q = quadro("atividades", [
       item({ nome: "c", valores: { Tipo: v({ label: "Contrato", text: "Contrato" }) } }),
       item({ nome: "e", valores: { Tipo: v({ label: "Entrega", text: "Entrega" }) } }),
       item({ nome: "x", valores: {} }),
     ]);
-    expect(montarItensJornal([q]).map((i) => i.tipo)).toEqual(["Contrato", "Entrega", "Atividade"]);
+    expect(itensDe([q]).map((i) => i.tipo)).toEqual(["Contrato", "Entrega", "Atividade"]);
   });
 });
 
 describe("campos copiados", () => {
   it("pagamentos: valor, favorecido, coordenação, observação, recorrência, chave, dono", () => {
-    const [i] = montarItensJornal([
+    const [i] = itensDe([
       quadro("pagamentos", [
         item({
           status: "Pago",
@@ -118,7 +120,7 @@ describe("campos copiados", () => {
       ],
       "TESTE",
     );
-    const [a, b] = montarItensJornal([q]);
+    const [a, b] = itensDe([q]);
     expect(a).toMatchObject({ responsavel: "Ana", observacao: "Aguardando", etapas: { total: 4, concluidas: 1 }, dono: "TESTE" });
     expect(b).not.toHaveProperty("responsavel");
     expect(b).not.toHaveProperty("etapas");

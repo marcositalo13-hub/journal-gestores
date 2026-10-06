@@ -55,6 +55,7 @@ export interface Aviso {
     | "obrigatoria_vazia"
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
+    | "prazo_movido_para_subitens"
     | "recorrencia_desconhecida"
     | "chave_duplicada"
     | "grupo_desconhecido"
@@ -95,6 +96,8 @@ export interface ItemNormalizado {
   motivo: string | null;
   /** progresso dos subitens (cancelados não contam); null se não há subitens */
   etapas: { total: number; concluidas: number } | null;
+  /** datas dos subitens não cancelados (YYYY-MM-DD), para detectar prazo movido para os subitens */
+  datasSubitens: string[];
 }
 
 export interface QuadroLido {
@@ -122,7 +125,7 @@ const ITEM_FIELDS = `
     ... on NumbersValue { number }
     ... on DropdownValue { values { label } }
   }
-  subitems { id column_values { id text column { title } ... on StatusValue { label } } }`;
+  subitems { id column_values { id text column { title } ... on StatusValue { label } ... on DateValue { date } } }`;
 
 const Q_QUADRO = `
 query ($ids: [ID!]) {
@@ -241,6 +244,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       chave: txt("Chave"),
       motivo: txt(tipoCfg.campo_motivo),
       etapas: contarEtapas(it.subitems ?? [], tipoCfg.status, tipoCfg.status_concluido, tipoCfg.status_cancelado),
+      datasSubitens: datasDeSubitens(it.subitems ?? [], tipoCfg.data, tipoCfg.status, tipoCfg.status_cancelado),
     };
 
     const ctx = { itemId: n.id, itemNome: n.nome };
@@ -255,6 +259,13 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     }
     if (n.noCadastro && idPorTitulo["Recorrência"] && vazio(n.recorrencia)) {
       av({ ...ctx, codigo: "cadastro_sem_recorrencia", mensagem: `"${n.nome}": item do Cadastro sem "Recorrência".` });
+    }
+    if (!n.noCadastro && !n.data && n.datasSubitens.length) {
+      av({
+        ...ctx,
+        codigo: "prazo_movido_para_subitens",
+        mensagem: `"${n.nome}": sem "${tipoCfg.data}", mas os subitens têm data (${[...n.datasSubitens].sort().at(-1)}). O monday copia/limpa a data do pai ao criar o primeiro subitem; restaure a data no item pai.`,
+      });
     }
     return n;
   });
@@ -300,6 +311,18 @@ export function contarEtapas(
     if (label === statusConcluido) concluidas++;
   }
   return total > 0 ? { total, concluidas } : null;
+}
+
+/** Datas dos subitens (coluna achada pelo TÍTULO), ignorando os cancelados. */
+export function datasDeSubitens(subitens: SubitemApi[], tituloData: string, tituloStatus: string, statusCancelado: string): string[] {
+  const out: string[] = [];
+  for (const s of subitens) {
+    const st = s.column_values.find((c) => c.column?.title?.trim() === tituloStatus);
+    if ((st?.label ?? st?.text ?? "").trim() === statusCancelado) continue;
+    const d = s.column_values.find((c) => c.column?.title?.trim() === tituloData)?.date;
+    if (d) out.push(d);
+  }
+  return out;
 }
 
 /** A API não devolve os grupos na ordem do quadro; ordena por `position`. */

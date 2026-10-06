@@ -1,7 +1,7 @@
 // Monta as seções da edição diária. Função pura: tudo entra por argumento (itens, hoje, config).
 import { diasEntre, ehDiaUtil, proximoDiaUtil, rotuloDia, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
-import type { ItemJornal } from "./itens";
+import type { ItemEdicao, ItemJornal, ItemSemPrazo } from "./itens";
 
 export interface ItemPendencia {
   item: ItemJornal;
@@ -10,7 +10,8 @@ export interface ItemPendencia {
 }
 
 export interface ItemTravado {
-  item: ItemJornal;
+  /** pode não ter data (ItemSemPrazo): um travado sem prazo continua aparecendo */
+  item: ItemEdicao;
   /** observação do item (campo de motivo) */
   motivo: string | null;
   // TODO: calcular dias travado quando houver histórico diário (hoje o monday só informa o status atual).
@@ -34,7 +35,7 @@ export interface DiaSemana {
 export type RegraManchete = "pagamento" | "contrato" | "pendencia" | "travado";
 
 export interface MancheteEdicao {
-  item: ItemJornal;
+  item: ItemEdicao;
   motivo: string;
   regra: RegraManchete;
 }
@@ -51,6 +52,8 @@ export interface ResumoGestor {
     atrasados: number;
     /** travados, de qualquer data */
     travados: number;
+    /** itens em aberto/travados sem nenhuma data */
+    semPrazo: number;
   };
   /** itens com data no mês corrente até hoje (sem cancelados) */
   mes: { concluidos: number; total: number };
@@ -64,13 +67,15 @@ export interface Edicao {
   hoje: ItemJornal[];
   pendencias: ItemPendencia[];
   travados: ItemTravado[];
+  /** itens em aberto/travados sem data (nem nos subitens): precisam de um prazo no monday */
+  semPrazo: ItemSemPrazo[];
   avisoNaoUtil: AvisoNaoUtil | null;
   semana: DiaSemana[];
   manchete: MancheteEdicao | null;
   gestores: ResumoGestor[];
 }
 
-const aberto = (i: ItemJornal) => i.categoria === "aberto" || i.categoria === "travado";
+const aberto = (i: ItemEdicao) => i.categoria === "aberto" || i.categoria === "travado";
 const porDataENome = (a: ItemJornal, b: ItemJornal) => a.data.localeCompare(b.data) || a.nome.localeCompare(b.nome, "pt-BR");
 
 function brl(v: number): string {
@@ -134,13 +139,14 @@ function escolherManchete(itens: ItemJornal[], pendencias: ItemPendencia[], trav
   return null;
 }
 
-function resumirGestores(itens: ItemJornal[], hoje: DataISO, cfg: JornalConfig): ResumoGestor[] {
+function resumirGestores(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: DataISO, cfg: JornalConfig): ResumoGestor[] {
   const inicioMes = `${hoje.slice(0, 8)}01`;
   const conhecidos = new Set(cfg.gestores.map((g) => g.nome));
-  const extras = [...new Set(itens.map((i) => i.dono))].filter((d) => !conhecidos.has(d));
+  const extras = [...new Set([...itens, ...semPrazo].map((i) => i.dono))].filter((d) => !conhecidos.has(d));
 
   const resumo = (nome: string, area: string | null, reportaA: string | null): ResumoGestor => {
     const meus = itens.filter((i) => i.dono === nome);
+    const meusSemPrazo = semPrazo.filter((i) => i.dono === nome);
     const mes = meus.filter((i) => i.data >= inicioMes && i.data <= hoje);
     return {
       nome,
@@ -149,7 +155,8 @@ function resumirGestores(itens: ItemJornal[], hoje: DataISO, cfg: JornalConfig):
       contagens: {
         hoje: meus.filter((i) => i.data === hoje && aberto(i)).length,
         atrasados: meus.filter((i) => i.data < hoje && aberto(i)).length,
-        travados: meus.filter((i) => i.categoria === "travado").length,
+        travados: meus.filter((i) => i.categoria === "travado").length + meusSemPrazo.filter((i) => i.categoria === "travado").length,
+        semPrazo: meusSemPrazo.length,
       },
       mes: { concluidos: mes.filter((i) => i.categoria === "concluido").length, total: mes.length },
     };
@@ -162,8 +169,10 @@ function resumirGestores(itens: ItemJornal[], hoje: DataISO, cfg: JornalConfig):
  * @param hoje    data da edição (YYYY-MM-DD, São Paulo)
  * @param geradoEm instante da leitura dos dados (ISO)
  */
-export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: JornalConfig, geradoEm: string): Edicao {
+export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: JornalConfig, geradoEm: string, semPrazoBruto: ItemSemPrazo[] = []): Edicao {
   const itens = itensBrutos.filter((i) => i.categoria !== "cancelado");
+  // sem prazo: só o que ainda exige ação (aberto/travado); cancelados e concluídos não precisam de data
+  const semPrazo = semPrazoBruto.filter(aberto).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   const secaoHoje = itens
     .filter((i) => i.data === hoje)
@@ -174,9 +183,9 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     .sort(porDataENome)
     .map((item) => ({ item, diasAtraso: diasEntre(item.data, hoje) }));
 
-  const travados: ItemTravado[] = itens
+  const travados: ItemTravado[] = [...itens, ...semPrazo]
     .filter((i) => i.categoria === "travado")
-    .sort(porDataENome)
+    .sort((a, b) => (a.data === null ? 1 : 0) - (b.data === null ? 1 : 0) || (a.data ?? "").localeCompare(b.data ?? "") || a.nome.localeCompare(b.nome, "pt-BR"))
     .map((item) => ({ item, motivo: item.observacao ?? null, diasTravado: null }));
 
   let avisoNaoUtil: AvisoNaoUtil | null = null;
@@ -200,9 +209,10 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     hoje: secaoHoje,
     pendencias,
     travados,
+    semPrazo,
     avisoNaoUtil,
     semana,
     manchete: escolherManchete(itens, pendencias, travados, hoje, cfg),
-    gestores: resumirGestores(itens, hoje, cfg),
+    gestores: resumirGestores(itens, semPrazo, hoje, cfg),
   };
 }

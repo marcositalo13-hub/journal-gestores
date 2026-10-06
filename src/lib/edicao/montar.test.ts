@@ -222,9 +222,9 @@ describe("gestores", () => {
     const lucas = g.find((x) => x.nome === "Lucas Martins")!;
     expect(lucas.area).toBe("Gerência de Operações e Suporte ao Cliente");
     expect(lucas.reportaA).toBe("Solange Mata");
-    expect(lucas.contagens).toEqual({ hoje: 1, atrasados: 3, travados: 1 });
+    expect(lucas.contagens).toEqual({ hoje: 1, atrasados: 3, travados: 1, semPrazo: 0 });
     expect(lucas.mes).toEqual({ concluidos: 2, total: 5 });
-    expect(g.at(-1)).toMatchObject({ nome: "TESTE", area: null, reportaA: null, contagens: { hoje: 0, atrasados: 1, travados: 0 }, mes: { concluidos: 0, total: 1 } });
+    expect(g.at(-1)).toMatchObject({ nome: "TESTE", area: null, reportaA: null, contagens: { hoje: 0, atrasados: 1, travados: 0, semPrazo: 0 }, mes: { concluidos: 0, total: 1 } });
     expect(g.find((x) => x.nome === "Solange Mata")!.mes).toEqual({ concluidos: 0, total: 0 });
   });
 });
