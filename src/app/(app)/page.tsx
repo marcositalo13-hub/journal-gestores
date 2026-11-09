@@ -2,6 +2,7 @@ import { CalendarClock } from "lucide-react";
 import type { ReactNode } from "react";
 import { BotaoItem } from "@/components/pauta/botao-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
+import { CartaoNotificacoes, TesteNotificacao } from "@/components/pauta/notificacoes";
 import { LegendaNiveis } from "@/components/pauta/legenda-niveis";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { Manchete } from "@/components/pauta/manchete";
@@ -86,6 +87,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
 
   return (
     <>
+      <CartaoNotificacoes />
       <NavegadorDias dias={dias} selecionado={outroDia?.data ?? edicao.data} />
 
       {simulada && (
@@ -195,6 +197,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
       )}
 
       <LegendaNiveis regras={textosLegenda(cfg)} />
+      <TesteNotificacao />
     </>
   );
 }

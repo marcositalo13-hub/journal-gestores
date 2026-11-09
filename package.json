@@ -11,7 +11,8 @@
     "test": "vitest run",
     "coletar": "tsx scripts/coletar.ts",
     "fotos:bucket": "tsx scripts/criar-bucket-fotos.ts",
-    "fotos:enviar": "tsx scripts/enviar-fotos.ts"
+    "fotos:enviar": "tsx scripts/enviar-fotos.ts",
+    "push:chaves": "tsx scripts/gerar-chaves-push.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -21,9 +22,11 @@
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@next/env": "^16.3.8",
@@ -31,6 +34,7 @@
     "@types/node": "^24.19.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "sharp": "^0.35.5",

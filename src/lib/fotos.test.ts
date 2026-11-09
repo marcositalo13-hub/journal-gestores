@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { getConfig } from "./config";
 import { slugDe } from "./edicao/caderno";
@@ -101,8 +101,11 @@ describe("fotos nunca vão para arquivos públicos", () => {
   it("a service role nunca é lida pelo código do app (só pelos scripts locais)", () => {
     const procurar = (dir: string): string[] =>
       readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f)).map((f) => join(dir, f));
-    const vazando = procurar(join(RAIZ, "src")).filter((f) => readFileSync(f, "utf8").includes("SERVICE_ROLE"));
+    // única exceção: o envio de push (servidor), que lê as inscrições de todos os aparelhos sem sessão de usuário
+    const vazando = procurar(join(RAIZ, "src"))
+      .filter((f) => !f.split(sep).join("/").endsWith("src/lib/push/enviar.ts"))
+      .filter((f) => readFileSync(f, "utf8").includes("SERVICE_ROLE"));
     expect(vazando).toEqual([]);
-    expect(readFileSync(join(RAIZ, ".env.local.example"), "utf8")).toMatch(/NUNCA/);
+    expect(readFileSync(join(RAIZ, ".env.local.example"), "utf8")).toMatch(/Nunca em variáveis NEXT_PUBLIC/);
   });
 });
