@@ -8,7 +8,7 @@ import { CartaoNotificacoes, TesteNotificacao } from "@/components/pauta/notific
 import { LegendaNiveis } from "@/components/pauta/legenda-niveis";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { Manchete } from "@/components/pauta/manchete";
-import { LinhaItem, MetaItem, RotuloItem } from "@/components/pauta/secao";
+import { LinhaItem, LinhaSemPrazo, MetaItem, RotuloItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
 import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
@@ -17,7 +17,7 @@ import { itemDaUrl } from "@/lib/edicao/item-da-url";
 import type { DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
 import { nivelUrgencia, textosLegenda } from "@/lib/edicao/urgencia";
-import { contagem, dataCurta, dataTitulo, etapasTexto, semPrazoTexto } from "@/lib/formato";
+import { contagem, dataCurta, dataTitulo, etapasTexto } from "@/lib/formato";
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -175,6 +175,16 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
             </Secao>
           )}
 
+          {edicao.semPrazo.length > 0 && (
+            <Secao id="s-sem-prazo" titulo="Sem prazo">
+              <ul>
+                {edicao.semPrazo.map((item) => (
+                  <LinhaSemPrazo key={item.id} item={item} hoje={hoje} />
+                ))}
+              </ul>
+            </Secao>
+          )}
+
           {edicao.avisoNaoUtil && (
             <section aria-labelledby="s-aviso" className="mt-8 overflow-hidden rounded-xl border border-aviso/30 bg-aviso/[0.07] px-4 pt-4 pb-2">
               <h2 id="s-aviso" className="titulo-secao flex items-center gap-2 text-aviso">
@@ -199,7 +209,6 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
             </section>
           )}
 
-          {edicao.semPrazo.length > 0 && <p className="mt-10 text-[0.9375rem] text-tinta-2">{semPrazoTexto(edicao.semPrazo.length)}</p>}
         </>
       )}
 

@@ -60,6 +60,7 @@ export interface Aviso {
     | "rotulo_nao_encontrado"
     | "recorrencia_diaria_nao_suportada"
     | "item_sem_area"
+    | "regra_sem_data"
     | "obrigatoria_vazia"
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
@@ -325,6 +326,17 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
         });
       }
     }
+    if (
+      ehRegraSemData(n) &&
+      !mesmoRotulo(n.status, tipoCfg.status_cancelado) &&
+      !mesmoRotulo(n.status, tipoCfg.status_concluido)
+    ) {
+      av({
+        ...ctx,
+        codigo: "regra_sem_data",
+        mensagem: `Regra "${n.nome}" (${n.porArea?.areaGrupo}): sem "${tipoCfg.data}" (data da primeira entrega). Sem ela não são criadas as cópias e a recorrência não aparece no painel.`,
+      });
+    }
     if (n.porArea?.finalizada && n.porArea.classe !== "regra" && !gestorDaArea(areaDaColuna(n, cfg), cfg)) {
       av({ ...ctx, codigo: "item_sem_area", mensagem: `"${n.nome}": sem "Área" em "${cfg.grupo_finalizadas}"; ficará como "Sem área" na edição.` });
     }
@@ -372,6 +384,14 @@ export function classificarItem(recorrencia: string | null, chave: string | null
   if (chave && chave.trim()) return "ocorrencia";
   const f = parseFrequencia(recorrencia);
   return f !== null && f !== "nao_recorrente" && f !== "diaria" ? "regra" : "unico";
+}
+
+/**
+ * Regra recorrente (por_area) numa área, sem Prazo (nem datas nos subitens): o coletor não consegue projetar
+ * as ocorrências e ela nunca apareceria. Vira item "sem prazo" na edição e aviso no coletor.
+ */
+export function ehRegraSemData(it: Pick<ItemNormalizado, "porArea" | "data" | "datasSubitens">): boolean {
+  return it.porArea?.classe === "regra" && it.porArea.areaGrupo !== null && !it.porArea.finalizada && !it.data && it.datasSubitens.length === 0;
 }
 
 /** Área preenchida na coluna Área (primeiro rótulo que é uma área do config), ou null. */

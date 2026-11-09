@@ -32,7 +32,8 @@ export async function relerItem(itemId: string, boardId: string, cfg: JornalConf
   if (!r) return null;
   const n = r.lido.itens[0];
   const { itens, semPrazo } = montarItensJornal([r.lido], cfg);
-  const j = itens[0] ?? semPrazo[0] ?? null;
+  // regra recorrente sem data é aviso do painel, nunca notificação
+  const j = itens[0] ?? (semPrazo[0]?.motivo === "regra_sem_data" ? null : semPrazo[0]) ?? null;
   return {
     tipoQuadro: r.qc.tipo,
     tituloDaColuna: (id) => r.colunas.find((c) => c.id === id)?.title.trim() ?? null,

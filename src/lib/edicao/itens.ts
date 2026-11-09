@@ -4,7 +4,8 @@ import { parseGrupoMes } from "../calendario";
 import { getConfig, gestorDaArea, gestorDaCoordenacao, type JornalConfig, type TipoQuadro } from "../config";
 import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo } from "../rotulos";
-import { areaDaColuna, type ItemNormalizado, type QuadroLido } from "../coletor/ler";
+import { areaDaColuna, ehRegraSemData, type ItemNormalizado, type QuadroLido } from "../coletor/ler";
+import type { MotivoSemPrazo } from "../sem-prazo";
 
 export type TipoItem = "Atividade" | "Entrega" | "Contrato" | "Pagamento";
 export type Categoria = "aberto" | "concluido" | "travado" | "cancelado";
@@ -34,7 +35,11 @@ export interface ItemJornal {
 }
 
 /** Item sem nenhuma data (nem nos subitens): nunca some, aparece em semPrazo. */
-export type ItemSemPrazo = Omit<ItemJornal, "data" | "dataHerdada"> & { data: null };
+export type ItemSemPrazo = Omit<ItemJornal, "data" | "dataHerdada"> & {
+  data: null;
+  /** "sem_prazo": item comum sem data; "regra_sem_data": regra recorrente sem data inicial (não gera cópias) */
+  motivo: MotivoSemPrazo;
+};
 
 /** Qualquer item que pode aparecer na edição. */
 export type ItemEdicao = ItemJornal | ItemSemPrazo;
@@ -106,7 +111,8 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
   for (const q of quadros) {
     const tcfg = cfg.tipos_de_quadro[q.tipo];
     for (const it of q.itens) {
-      if (!entra(it, cfg)) continue;
+      const regraSemData = ehRegraSemData(it); // regras com data nunca entram; sem data, aparecem em "Sem prazo"
+      if (!entra(it, cfg) && !regraSemData) continue;
       const valor = it.valores["Valor (R$)"]?.number;
       const coordenacao = it.valores["Coordenação"]?.labels?.join(", ") || it.valores["Coordenação"]?.text;
       const base = {
@@ -129,7 +135,7 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
       };
       const { data, herdada } = dataDoItem(it);
       if (data) itens.push({ ...base, data, ...(herdada ? { dataHerdada: true as const } : {}) });
-      else semPrazo.push({ ...base, data: null });
+      else semPrazo.push({ ...base, data: null, motivo: regraSemData ? "regra_sem_data" : "sem_prazo" });
     }
   }
   return { itens, semPrazo };

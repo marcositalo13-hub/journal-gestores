@@ -20,9 +20,15 @@ describe("mensagemItem", () => {
       'Olá, Keite. Sobre o pagamento "Aluguel da sede" de 09/10: qual é a situação?',
     );
   });
-  it("item sem prazo: omite a data", () => {
-    expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null }, "Ana")).toBe('Olá, Ana. Sobre "X": qual é a situação?');
-    expect(mensagemItem({ nome: "X", tipo: "Pagamento", data: null }, "Ana")).toBe('Olá, Ana. Sobre o pagamento "X": qual é a situação?');
+  it("item sem prazo: pergunta o prazo (qualquer tipo)", () => {
+    expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
+    expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null, motivo: "sem_prazo" }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
+    expect(mensagemItem({ nome: "X", tipo: "Pagamento", data: null }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
+  });
+  it("recorrência sem data inicial: pergunta a data da primeira entrega e explica", () => {
+    expect(mensagemItem({ nome: "Intercompany WIZ", tipo: "Atividade", data: null, motivo: "regra_sem_data" }, "Graziely")).toBe(
+      'Olá, Graziely. Qual é a data da primeira entrega de "Intercompany WIZ"? Sem ela, a recorrência não aparece no painel.',
+    );
   });
   it("nunca inclui o valor: a função nem recebe o campo, e um item com valor gera o mesmo texto", () => {
     const item = { nome: "Aluguel", tipo: "Pagamento", data: "2026-10-09", valor: 80000 };

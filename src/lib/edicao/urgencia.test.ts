@@ -125,3 +125,13 @@ describe("config.urgencia é validada", () => {
     for (const v of [0, -1, 1.5, "3"]) expect(() => validarConfig({ ...raw, urgencia: { atencao_dias_uteis: v } })).toThrow(/atencao_dias_uteis/);
   });
 });
+
+describe("rótulo de itens sem prazo", () => {
+  it("sem prazo comum, recorrência sem data inicial e travado sem prazo; sempre amarelo (travado: vermelho)", () => {
+    const sem = (motivo: "sem_prazo" | "regra_sem_data", categoria: Categoria = "aberto") => ({ data: null, categoria, motivo });
+    expect(rotuloUrgencia(sem("sem_prazo"), HOJE, cfg)).toBe("Sem prazo");
+    expect(rotuloUrgencia(sem("regra_sem_data"), HOJE, cfg)).toBe("Recorrência sem data inicial — não gera as cópias");
+    expect(nivelUrgencia(sem("regra_sem_data"), HOJE, cfg)).toBe("amarelo");
+    expect(rotuloUrgencia(sem("sem_prazo", "travado"), HOJE, cfg)).toBe("Travado");
+  });
+});

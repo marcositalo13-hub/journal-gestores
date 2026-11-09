@@ -3,11 +3,12 @@
 import { diasEntre, ehDiaUtil, proximoDiaUtil, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
 import { piorNivel, type Nivel } from "../niveis";
+import { textoSemPrazo, type MotivoSemPrazo } from "../sem-prazo";
 import type { ItemEdicao } from "./itens";
 
 export type { Nivel };
 
-type ItemUrgencia = Pick<ItemEdicao, "categoria" | "data"> & { tipoQuadro?: string };
+type ItemUrgencia = Pick<ItemEdicao, "categoria" | "data"> & { tipoQuadro?: string; motivo?: MotivoSemPrazo };
 
 /** Último dia da janela de atenção: o N-ésimo dia útil depois de hoje. */
 export function limiteDeAtencao(hoje: DataISO, cfg: JornalConfig): DataISO {
@@ -55,7 +56,7 @@ export function rotuloUrgencia(item: ItemUrgencia, hoje: DataISO, cfg: JornalCon
   }
   if (item.categoria === "travado") return "Travado";
   if (item.data === hoje) return "Vence hoje";
-  if (item.data === null) return "Sem prazo";
+  if (item.data === null) return textoSemPrazo(item.motivo);
   if (nivel === "amarelo") {
     if (diasEntre(hoje, item.data) === 1) return "Amanhã";
     const n = diasUteisAte(hoje, item.data, cfg);

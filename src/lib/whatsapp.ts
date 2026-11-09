@@ -16,9 +16,16 @@ export interface ItemParaMensagem {
   tipo: string;
   /** YYYY-MM-DD ou null (item sem prazo) */
   data: string | null;
+  /** só para itens sem prazo: "regra_sem_data" = recorrência sem data inicial */
+  motivo?: string;
 }
 
 export function mensagemItem(item: ItemParaMensagem, primeiro: string): string {
+  if (item.data === null) {
+    return item.motivo === "regra_sem_data"
+      ? `Olá, ${primeiro}. Qual é a data da primeira entrega de "${item.nome}"? Sem ela, a recorrência não aparece no painel.`
+      : `Olá, ${primeiro}. Qual é o prazo de "${item.nome}"?`;
+  }
   if (item.tipo === "Pagamento") {
     return item.data
       ? `Olá, ${primeiro}. Sobre o pagamento "${item.nome}" de ${ddmm(item.data)}: qual é a situação?`

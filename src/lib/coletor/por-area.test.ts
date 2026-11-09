@@ -468,3 +468,58 @@ describe("caso real: 4 regras mensais da Controladoria ('4. Mensal')", () => {
     expect(valores).toMatchObject({ obs: "Aguardando fechamento da contabilidade", rec: { ids: [5] }, st: { index: 17 }, area: { ids: [idArea(CTRL)] } });
   });
 });
+
+describe("recorrência sem data inicial (regra_sem_data)", () => {
+  const semData = [
+    { id: "r1", nome: "Intercompany WIZ", rec: "4. Mensal", status: "Regra recorrente", area: OPER },
+    { id: "r2", nome: "Intercompany BRB", rec: "4. Mensal", status: "Regra recorrente", grupo: CTRL, area: CTRL },
+  ];
+
+  it("o coletor avisa por regra, com nome e área, e não cria nada", () => {
+    const q = ler(semData);
+    const avisos = q.avisos.filter((a) => a.codigo === "regra_sem_data");
+    expect(avisos.map((a) => a.itemNome)).toEqual(["Intercompany WIZ", "Intercompany BRB"]);
+    expect(avisos[0].mensagem).toContain("Intercompany WIZ");
+    expect(avisos[0].mensagem).toContain(OPER);
+    expect(avisos[0].mensagem).toContain("não são criadas as cópias");
+    expect(de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "seria_criada")).toEqual([]);
+  });
+
+  it("não avisa: regra com data, regra cancelada ou concluída, regra em finalizadas, item único sem data", () => {
+    const q = ler([
+      { id: "1", rec: "4. Mensal", status: "Regra recorrente", prazo: "2026-11-10", area: OPER },
+      { id: "2", rec: "4. Mensal", status: "Cancelado", area: OPER },
+      { id: "3", rec: "4. Mensal", status: "Concluído", area: OPER },
+      { id: "4", rec: "4. Mensal", status: "Regra recorrente", grupo: FINAL, area: OPER },
+      { id: "5", status: "Em andamento", area: OPER },
+    ]);
+    expect(q.avisos.filter((a) => a.codigo === "regra_sem_data")).toEqual([]);
+  });
+
+  it("entram em semPrazo com motivo regra_sem_data, no gestor da área; itens comuns sem data têm motivo sem_prazo", () => {
+    const q = ler([...semData, { id: "u1", nome: "Comum sem data", status: "Em andamento", area: OPER }]);
+    const { itens, semPrazo } = montarItensJornal([q], cfg);
+    expect(itens).toEqual([]);
+    const porNome = Object.fromEntries(semPrazo.map((s) => [s.nome, s]));
+    expect(porNome["Intercompany WIZ"]).toMatchObject({ motivo: "regra_sem_data", data: null, dono: gestorDaArea(OPER, cfg) });
+    expect(porNome["Intercompany BRB"]).toMatchObject({ motivo: "regra_sem_data", dono: gestorDaArea(CTRL, cfg) });
+    expect(porNome["Comum sem data"]).toMatchObject({ motivo: "sem_prazo" });
+  });
+
+  it("regras com data, canceladas ou em finalizadas continuam fora; a edição e as contagens do gestor incluem as duas espécies", () => {
+    const q = ler([
+      ...semData,
+      { id: "c1", nome: "Comum sem data", status: "Em andamento", area: OPER },
+      { id: "d1", nome: "Regra datada", rec: "4. Mensal", status: "Regra recorrente", prazo: "2026-11-10", area: OPER },
+      { id: "x1", nome: "Regra cancelada", rec: "4. Mensal", status: "Cancelado", area: OPER },
+      { id: "f1", nome: "Regra encerrada", rec: "4. Mensal", status: "Regra recorrente", grupo: FINAL, area: OPER },
+    ]);
+    const { itens, semPrazo } = montarItensJornal([q], cfg);
+    expect(itens).toEqual([]);
+    const e = montarEdicao(itens, HOJE, cfg, "2026-11-05T13:00:00Z", semPrazo);
+    expect(e.semPrazo.map((s) => s.nome).sort()).toEqual(["Comum sem data", "Intercompany BRB", "Intercompany WIZ"]);
+    const dono = gestorDaArea(OPER, cfg)!;
+    expect(e.gestores.find((g) => g.nome === dono)?.contagens.semPrazo).toBe(2); // WIZ + comum
+    expect(e.gestores.find((g) => g.nome === gestorDaArea(CTRL, cfg))?.contagens.semPrazo).toBe(1); // BRB
+  });
+});

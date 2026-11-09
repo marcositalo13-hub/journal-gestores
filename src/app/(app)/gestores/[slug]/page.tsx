@@ -5,7 +5,7 @@ import { Avatar } from "@/components/pauta/avatar";
 import { AlternarEquipe } from "@/components/pauta/alternar-equipe";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
-import { LinhaItem, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
+import { LinhaItem, LinhaSemPrazo, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
 import { dataPorExtenso, hoje } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { montarCaderno, slugDe } from "@/lib/edicao/caderno";
@@ -177,9 +177,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
         <Secao id="s-sem-prazo" titulo="Sem prazo">
           <ul>
             {c.semPrazo.map((item) => (
-              <LinhaItem key={item.id} item={item} hoje={dia}>
-                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<RotuloItem item={item} hoje={dia} />} />
-              </LinhaItem>
+              <LinhaSemPrazo key={item.id} item={item} hoje={dia} />
             ))}
           </ul>
         </Secao>

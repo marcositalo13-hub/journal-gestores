@@ -164,7 +164,7 @@ const base = {
 let m = 0;
 const sp = (o: Partial<ItemSemPrazo> = {}): ItemSemPrazo => {
   m++;
-  return { ...base, id: `sp${m}`, nome: `Sem prazo ${m}`, dono: "TESTE", data: null, ...o };
+  return { ...base, id: `sp${m}`, nome: `Sem prazo ${m}`, dono: "TESTE", data: null, motivo: "sem_prazo", ...o };
 };
 const com = (o: Partial<ItemJornal> & { data: string }): ItemJornal => {
   m++;

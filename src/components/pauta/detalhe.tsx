@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import type { ItemEdicao } from "@/lib/edicao/itens";
 import { dataCurta, etapasTexto } from "@/lib/formato";
+import { textoSemPrazo } from "@/lib/sem-prazo";
 import { mensagemItem, primeiroNome } from "@/lib/whatsapp";
 import { ContatoWhatsapp } from "./contato-whatsapp";
 import { PillStatus } from "./pill-status";
@@ -87,6 +88,8 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                 />
               </div>
             )}
+
+            {item.data === null && <p className="px-5 pb-3 text-[0.9375rem] font-semibold leading-snug text-nivel-amarelo-texto">{textoSemPrazo(item.motivo)}</p>}
 
             <dl className="overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
               <Campo rotulo={"dataHerdada" in item && item.dataHerdada ? "Prazo da última etapa" : "Prazo"}>

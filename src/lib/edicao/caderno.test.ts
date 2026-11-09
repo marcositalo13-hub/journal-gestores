@@ -22,7 +22,7 @@ const mk = (o: Partial<ItemJornal> & { data: string; dono: string }): ItemJornal
 };
 const sp = (o: Partial<ItemSemPrazo> & { dono: string }): ItemSemPrazo => {
   n++;
-  return { id: `s${n}`, nome: `Sem prazo ${n}`, quadroId: "200", tipoQuadro: "atividades", tipo: "Atividade", status: "Em andamento", categoria: "aberto", updatedAt: "x", data: null, ...o };
+  return { id: `s${n}`, nome: `Sem prazo ${n}`, quadroId: "200", tipoQuadro: "atividades", tipo: "Atividade", status: "Em andamento", categoria: "aberto", updatedAt: "x", data: null, motivo: "sem_prazo", ...o };
 };
 const cad = (itens: ItemJornal[], nome: string, equipe = false, semPrazo: ItemSemPrazo[] = []) => montarCaderno(itens, semPrazo, HOJE, cfg, nome, equipe)!;
 

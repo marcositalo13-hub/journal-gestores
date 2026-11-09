@@ -1,11 +1,12 @@
 import { Fragment, type ReactNode } from "react";
 import type { DataISO } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
-import type { ItemEdicao } from "@/lib/edicao/itens";
+import type { ItemEdicao, ItemSemPrazo } from "@/lib/edicao/itens";
 import { urgenciaDoItem } from "@/lib/edicao/urgencia";
 import { cn } from "@/lib/utils";
 import { BotaoItem } from "./botao-item";
-import { RotuloNivel } from "./nivel";
+import { ConteudoLinha } from "./linha";
+import { COR_TEXTO, RotuloNivel } from "./nivel";
 import { Valor } from "./valor";
 
 export function Secao({ id, titulo, children, alerta, pequeno }: { id: string; titulo: string; children: ReactNode; alerta?: boolean; pequeno?: boolean }) {
@@ -27,6 +28,28 @@ export function LinhaItem({ item, hoje, children }: { item: ItemEdicao; hoje: Da
         {children}
       </BotaoItem>
     </li>
+  );
+}
+
+/**
+ * Linha da seção "Sem prazo": nome; "{gestor} · {área curta}"; e o motivo ("Sem prazo" ou "Recorrência sem data
+ * inicial — não gera as cópias"), na cor do nível (amarelo; vermelho se o item também estiver travado).
+ */
+export function LinhaSemPrazo({ item, hoje }: { item: ItemSemPrazo; hoje: DataISO }) {
+  const { nivel, rotulo } = urgenciaDoItem(item, hoje, getConfig());
+  return (
+    <LinhaItem item={item} hoje={hoje}>
+      <ConteudoLinha
+        item={item}
+        mostrarTipo={false}
+        meta={
+          <>
+            <MetaItem item={item} />
+            {rotulo && <span className={cn("mt-0.5 block text-[0.9375rem] font-semibold leading-snug", nivel && COR_TEXTO[nivel])}>{rotulo}</span>}
+          </>
+        }
+      />
+    </LinhaItem>
   );
 }
 
