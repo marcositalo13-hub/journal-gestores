@@ -1,50 +1,14 @@
-import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { ErroEdicao } from "@/components/pauta/atualizar";
+import { CelulaGestor } from "@/components/pauta/celula-gestor";
 import { dataPorExtenso } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
 import { hierarquia, slugDe } from "@/lib/edicao/caderno";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
-import type { ResumoGestor } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
-import { cn } from "@/lib/utils";
+import { urlsDasFotos } from "@/lib/fotos-servidor";
 
 export const metadata: Metadata = { title: "Gestores" };
-
-/** "hoje N · atrasados N · travados N" (texto sempre presente; alerta só quando > 0) ou "em dia". */
-function Contagens({ c }: { c: ResumoGestor["contagens"] }) {
-  if (c.hoje + c.atrasados + c.travados + c.semPrazo === 0) return <span className="text-tinta-2">em dia</span>;
-  const alerta = (n: number) => (n > 0 ? "font-semibold text-alerta" : undefined);
-  return (
-    <>
-      hoje {c.hoje} · <span className={alerta(c.atrasados)}>atrasados {c.atrasados}</span> · <span className={alerta(c.travados)}>travados {c.travados}</span>
-      {c.semPrazo > 0 && ` · sem prazo ${c.semPrazo}`}
-    </>
-  );
-}
-
-function LinhaGestor({ g, nivel, qs }: { g: ResumoGestor; nivel: number; qs: string }) {
-  return (
-    <li className="border-b border-borda last:border-b-0">
-      <Link href={`/gestores/${slugDe(g.nome)}${qs}`} className="linha -mx-5 flex w-[calc(100%+2.5rem)] items-center gap-3 px-5 py-3">
-        {/* recuo por nível + fio vertical, como num organograma de jornal */}
-        <span className="block min-w-0 flex-1" style={{ paddingLeft: `${nivel * 1.125}rem` }}>
-          <span className={cn("block", nivel > 0 && "border-l border-borda pl-3")}>
-            <span className="flex min-w-0 items-baseline whitespace-nowrap">
-              <span className="nome-item shrink-0">{g.nome}</span>
-              {areaCurta(g.nome) && <span className="min-w-0 truncate text-base font-normal text-tinta-2">&nbsp;·&nbsp;{areaCurta(g.nome)}</span>}
-            </span>
-            <span className="mt-1 block text-[0.9375rem] leading-snug tabular-nums text-tinta">
-              <Contagens c={g.contagens} />
-            </span>
-          </span>
-        </span>
-        <ChevronRight aria-hidden size={18} className="shrink-0 text-tinta-2/70" />
-      </Link>
-    </li>
-  );
-}
 
 export default async function PaginaGestores({ searchParams }: PageProps<"/gestores">) {
   const simulada = dataDeTeste((await searchParams).data, process.env.NODE_ENV);
@@ -56,15 +20,31 @@ export default async function PaginaGestores({ searchParams }: PageProps<"/gesto
     },
   );
   if (!resultado.edicao) return <ErroEdicao />;
-  const { gestores } = resultado.edicao;
+
+  const cfg = getConfig();
+  const porNome = new Map(resultado.edicao.gestores.map((g) => [g.nome, g]));
   const qs = simulada ? `?data=${simulada}` : "";
 
-  const porNome = new Map(gestores.map((g) => [g.nome, g]));
-  const arvore = hierarquia(getConfig()).flatMap(({ nome, nivel }) => {
+  // Topo da hierarquia (reporta a alguém fora da lista: o diretor) sozinho; os demais na ordem do config.
+  const topo = hierarquia(cfg).find((h) => h.nivel === 0)?.nome ?? cfg.gestores[0].nome;
+  const demais = cfg.gestores.map((g) => g.nome).filter((n) => n !== topo);
+  const fora = resultado.edicao.gestores.filter((g) => g.area === null).map((g) => g.nome);
+
+  const fotos = await urlsDasFotos([topo, ...demais, ...fora]);
+  const celula = (nome: string, grande?: boolean) => {
     const g = porNome.get(nome);
-    return g ? [{ g, nivel }] : [];
-  });
-  const fora = gestores.filter((g) => g.area === null);
+    return (
+      <CelulaGestor
+        key={nome}
+        nome={nome}
+        areaCurta={areaCurta(nome)}
+        url={fotos[nome]}
+        href={`/gestores/${slugDe(nome)}${qs}`}
+        contagens={g?.contagens ?? { atrasados: 0, travados: 0, semPrazo: 0 }}
+        grande={grande}
+      />
+    );
+  };
 
   return (
     <>
@@ -74,22 +54,16 @@ export default async function PaginaGestores({ searchParams }: PageProps<"/gesto
         </p>
       )}
       <h2 className="titulo-jornal text-[1.75rem]">Gestores</h2>
-      <ul className="mt-3 border-t border-borda">
-        {arvore.map(({ g, nivel }) => (
-          <LinhaGestor key={g.nome} g={g} nivel={nivel} qs={qs} />
-        ))}
-      </ul>
+
+      <div className="mt-5 flex justify-center">{celula(topo, true)}</div>
+      <div className="mt-4 grid grid-cols-3 gap-x-2 gap-y-4">{demais.map((n) => celula(n))}</div>
 
       {fora.length > 0 && (
         <section aria-labelledby="s-fora" className="mt-8 border-t border-borda pt-5">
           <h3 id="s-fora" className="rotulo-gestor">
             Fora da estrutura
           </h3>
-          <ul className="mt-1">
-            {fora.map((g) => (
-              <LinhaGestor key={g.nome} g={g} nivel={0} qs={qs} />
-            ))}
-          </ul>
+          <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-4">{fora.map((n) => celula(n))}</div>
         </section>
       )}
     </>

@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { dataPorExtenso, hoje, horaMinuto, saudacao } from "@/lib/calendario";
 import { getConfig, leitorPorEmail } from "@/lib/config";
+import { dataCurta } from "@/lib/formato";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { AlternarValores } from "@/components/pauta/alternar-valores";
+import { CabecalhoApp } from "@/components/pauta/cabecalho-app";
 import { Atualizado } from "@/components/pauta/atualizado";
 import { ProvedorDetalhe } from "@/components/pauta/detalhe";
 import { sair } from "../entrar/actions";
@@ -30,31 +32,27 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <ProvedorDetalhe gestores={diretorio}>
       <div className="flex min-h-dvh flex-col">
-        <header className="topo-seguro regua-dupla">
-          <div className="mx-auto w-full max-w-[640px] px-5 pb-5">
-            <div className="flex items-center justify-end gap-1">
+        <CabecalhoApp
+          acoes={
+            <>
               <AlternarValores />
               <form action={sair}>
                 <button type="submit" className="pressionavel -mr-3 min-h-11 min-w-11 px-3 text-[0.9375rem] text-tinta-2">
                   Sair
                 </button>
               </form>
-            </div>
-            <h1 className="titulo-jornal text-[2.1rem] sm:text-[2.55rem]">A Pauta</h1>
-            <p className="mt-3 text-base text-tinta">
-              {saudacao(hora.h)}, {leitor.nome}. Estas são as prioridades de hoje.
-            </p>
-            <p className="mt-1 text-base text-tinta-2">
-              <time dateTime={dia}>{dataPorExtenso(dia)}</time>
-            </p>
-            {/* Linha própria (não quebra a data). Suspense: a leitura do monday (cache frio ~2 s) não bloqueia o cabeçalho. */}
-            <p className="mt-1 text-[0.875rem] text-tinta-2">
-              <Suspense fallback={<span>atualizando…</span>}>
-                <Atualizado />
-              </Suspense>
-            </p>
-          </div>
-        </header>
+            </>
+          }
+          saudacao={`${saudacao(hora.h)}, ${leitor.nome}. Estas são as prioridades de hoje.`}
+          dataExtenso={<time dateTime={dia}>{dataPorExtenso(dia)}</time>}
+          dataCompacta={<time dateTime={dia}>{dataCurta(dia)}</time>}
+          // Suspense: a leitura do monday (cache frio ~2 s) não bloqueia o cabeçalho.
+          atualizado={
+            <Suspense fallback={<span>atualizando…</span>}>
+              <Atualizado />
+            </Suspense>
+          }
+        />
 
         {/* espaço para a barra de abas fixa + área segura inferior */}
         <main className="mx-auto w-full max-w-[640px] flex-1 px-5 pt-6 pb-[calc(var(--altura-abas)+env(safe-area-inset-bottom)+1.5rem)]">

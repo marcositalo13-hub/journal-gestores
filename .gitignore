@@ -45,3 +45,7 @@ next-env.d.ts
 
 # dry-run output
 /tmp
+
+# fotos dos gestores: ficam só na sua máquina e no bucket privado do Supabase
+/fotos-gestores/*
+!/fotos-gestores/LEIA-ME.txt

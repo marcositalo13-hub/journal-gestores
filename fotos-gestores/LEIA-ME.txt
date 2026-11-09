@@ -1,0 +1,19 @@
+Coloque aqui as fotos dos gestores (esta pasta NÃO vai para o GitHub; só este arquivo).
+
+Nome do arquivo = nome do gestor, sem acento, minúsculo, com hifens, + .jpg, .png ou .webp:
+
+  solange-mata.jpg
+  solange-mescouto.jpg
+  lucas-martins.jpg
+  keite-martins.jpg
+  joao-silva.jpg
+  graziely-palma.jpg
+  vanessa-petri.jpg
+  danielle-aquino.jpg
+
+Depois, na raiz do projeto:
+
+  npm run fotos:bucket    (uma vez: cria o bucket privado)
+  npm run fotos:enviar    (envia; reduz para 512x512 com recorte central)
+
+Pode rodar fotos:enviar de novo quando trocar uma foto: ela é substituída.

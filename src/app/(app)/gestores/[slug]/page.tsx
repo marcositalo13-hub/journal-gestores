@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Avatar } from "@/components/pauta/avatar";
 import { AlternarEquipe } from "@/components/pauta/alternar-equipe";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
@@ -11,6 +12,7 @@ import { getConfig } from "@/lib/config";
 import { montarCaderno, slugDe } from "@/lib/edicao/caderno";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import { obterItens } from "@/lib/edicao/obter";
+import { urlsDasFotos } from "@/lib/fotos-servidor";
 import { dataCurta, etapasTexto, haDias } from "@/lib/formato";
 import { mensagemCaderno, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
 import { BotaoWhatsapp } from "@/components/pauta/botao-whatsapp";
@@ -39,6 +41,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
   const c = nome ? montarCaderno(dados.itens, dados.semPrazo, simulada ?? hoje(), cfg, nome, comEquipe) : null;
   if (!c) notFound();
 
+  const foto = (await urlsDasFotos([c.gestor.nome]))[c.gestor.nome];
   const whatsapp = cfg.gestores.find((g) => g.nome === c.gestor.nome)?.whatsapp;
   const vazio = [c.atrasados, c.travados, c.hoje, c.proximos14, c.semPrazo].every((x) => x.length === 0);
   const pct = c.mes.total > 0 ? (c.mes.concluidos / c.mes.total) * 100 : 0;
@@ -56,9 +59,14 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
       )}
 
       <header className="mt-1">
-        <h2 className="titulo-jornal text-[2rem] leading-[1.1]">{c.gestor.nome}</h2>
-        {c.gestor.area && <p className="mt-1.5 text-base text-tinta-2">{c.gestor.area}</p>}
-        <p className="mt-0.5 text-[0.9375rem] text-tinta-2">{c.gestor.reportaA ? `Reporta a ${c.gestor.reportaA}` : "Fora da estrutura"}</p>
+        <div className="flex items-center gap-4">
+          <Avatar nome={c.gestor.nome} url={foto} tamanho={72} />
+          <div className="min-w-0">
+            <h2 className="titulo-jornal text-[2rem] leading-[1.1]">{c.gestor.nome}</h2>
+            {c.gestor.area && <p className="mt-1.5 text-base text-tinta-2">{c.gestor.area}</p>}
+            <p className="mt-0.5 text-[0.9375rem] text-tinta-2">{c.gestor.reportaA ? `Reporta a ${c.gestor.reportaA}` : "Fora da estrutura"}</p>
+          </div>
+        </div>
         {whatsapp && (
           <BotaoWhatsapp
             className="mt-5"
