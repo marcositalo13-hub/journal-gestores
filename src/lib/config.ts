@@ -11,6 +11,9 @@ export interface Leitor {
   nome: string;
 }
 
+export const RECORTES_FOTO = ["north", "center", "attention"] as const;
+export type RecorteFoto = (typeof RECORTES_FOTO)[number];
+
 export interface Urgencia {
   /** itens com prazo nos próximos N dias úteis ficam em "amarelo" (atenção) */
   atencao_dias_uteis: number;
@@ -78,6 +81,8 @@ export interface JornalConfig {
   considerar_facultativos_como_nao_util: boolean;
   manchete: Manchete;
   urgencia: Urgencia;
+  /** recorte das fotos por slug ({"joao-silva": "center"}); o padrão é "north" */
+  fotos_recorte?: Record<string, RecorteFoto>;
   feriados: string[];
   facultativos: string[];
 }
@@ -250,6 +255,15 @@ export function validarConfig(c: unknown): JornalConfig {
   if (typeof o.urgencia !== "object" || o.urgencia === null) erros.push(`"urgencia" deve ser objeto`);
   else if (typeof uc.atencao_dias_uteis !== "number" || !Number.isInteger(uc.atencao_dias_uteis) || uc.atencao_dias_uteis < 1) {
     erros.push(`urgencia.atencao_dias_uteis deve ser número inteiro >= 1`);
+  }
+  if (o.fotos_recorte !== undefined) {
+    const fr = o.fotos_recorte;
+    if (typeof fr !== "object" || fr === null || Array.isArray(fr)) erros.push(`"fotos_recorte" deve ser objeto`);
+    else {
+      for (const [slug, v] of Object.entries(fr)) {
+        if (!RECORTES_FOTO.includes(v as RecorteFoto)) erros.push(`fotos_recorte.${slug} deve ser ${RECORTES_FOTO.join(", ")}`);
+      }
+    }
   }
   for (const k of ["feriados", "facultativos"]) {
     arr(k).forEach((d, i) => {

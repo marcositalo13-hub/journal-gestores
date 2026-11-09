@@ -1,4 +1,4 @@
-// Envia as fotos de ./fotos-gestores/ para o bucket privado "gestores", já em 512×512 (recorte central) WebP.
+// Envia as fotos de ./fotos-gestores/ para o bucket privado "gestores", já em 512×512 (recorte ancorado no topo; padrão "north", ajustável em fotos_recorte na config) WebP.
 // Roda SÓ na sua máquina, com a service role do .env.local. Arquivos: {slug}.jpg|png|webp (ex.: joao-silva.jpg).
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
@@ -8,6 +8,8 @@ import sharp from "sharp";
 import { getConfig } from "../src/lib/config";
 import { slugDe } from "../src/lib/edicao/caderno";
 import { BUCKET_FOTOS, TAMANHO_FOTO, caminhoDaFoto, classificarArquivosDeFotos } from "../src/lib/fotos";
+
+const posicao = (r: string) => (r === "attention" ? sharp.strategy.attention : r === "center" ? "centre" : "north");
 
 async function main() {
   loadEnvConfig(process.cwd(), undefined, { info: () => {}, error: console.error });
@@ -28,17 +30,19 @@ async function main() {
   const { data: bucket } = await sb.storage.getBucket(BUCKET_FOTOS);
   if (!bucket) throw new Error(`O bucket "${BUCKET_FOTOS}" não existe. Rode antes: npm run fotos:bucket`);
 
+  const recortes = getConfig().fotos_recorte ?? {};
   let falhas = 0;
   for (const { arquivo, slug } of validos) {
+    const recorte = recortes[slug] ?? "north";
     try {
       const webp = await sharp(readFileSync(join(pasta, arquivo)))
         .rotate() // respeita a orientação do EXIF (fotos de celular)
-        .resize(TAMANHO_FOTO, TAMANHO_FOTO, { fit: "cover", position: "centre" })
+        .resize(TAMANHO_FOTO, TAMANHO_FOTO, { fit: "cover", position: posicao(recorte) })
         .webp({ quality: 85 })
         .toBuffer();
       const { error } = await sb.storage.from(BUCKET_FOTOS).upload(caminhoDaFoto(slug), webp, { contentType: "image/webp", upsert: true, cacheControl: "3600" });
       if (error) throw new Error(error.message);
-      console.log(`✓ ${arquivo} → ${caminhoDaFoto(slug)} (${Math.round(webp.length / 1024)} KB)`);
+      console.log(`✓ ${arquivo} → ${caminhoDaFoto(slug)} (${Math.round(webp.length / 1024)} KB, recorte ${recorte})`);
     } catch (e) {
       falhas++;
       console.error(`✗ ${arquivo}: ${e instanceof Error ? e.message : e}`);

@@ -33,3 +33,13 @@ describe("config: whatsapp (opcional)", () => {
     }
   });
 });
+
+describe("fotos_recorte", () => {
+  it("aceita north/center/attention, rejeita o resto, é opcional", async () => {
+    const { validarConfig } = await import("./config");
+    const raw = (await import("../../config/jornal.config.json")).default;
+    expect(() => validarConfig({ ...raw, fotos_recorte: { "joao-silva": "center" } })).not.toThrow();
+    expect(() => validarConfig({ ...raw, fotos_recorte: { "joao-silva": "south" } })).toThrow(/fotos_recorte/);
+    expect(() => validarConfig({ ...raw, fotos_recorte: [] })).toThrow(/fotos_recorte/);
+  });
+});
