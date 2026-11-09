@@ -1,3 +1,4 @@
+import { areaCurta } from "@/lib/config";
 import { diasEntre } from "@/lib/calendario";
 import type { MancheteEdicao, RegraManchete } from "@/lib/edicao/montar";
 import { dataCurta, venceEm } from "@/lib/formato";
@@ -41,6 +42,7 @@ export function Manchete({ manchete, hoje }: { manchete: MancheteEdicao | null; 
         <span className="titulo-jornal mt-2 block text-[1.875rem] leading-[1.1]">{item.nome}</span>
         <span className="mt-3 block text-base leading-6 text-tinta-2">
           {motivoDe(manchete, hoje)} · {item.dono}
+          {areaCurta(item.dono) && ` · ${areaCurta(item.dono)}`}
           {item.data && ` · ${dataCurta(item.data)}`}
           {typeof item.valor === "number" && (
             <>

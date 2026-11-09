@@ -8,14 +8,14 @@
     {"email": "marcos.porto@brbseguros.com.br", "nome": "Marcos"}
   ],
   "gestores": [
-    {"nome":"Solange Mata","area":"Superintendência de Finanças e Operações","reporta_a":"Egídio","quadro_id":null},
-    {"nome":"Solange Mescouto","area":"Gerência Jurídico, Riscos e Compliance","reporta_a":"Solange Mata","quadro_id":null},
-    {"nome":"Lucas Martins","area":"Gerência de Operações e Suporte ao Cliente","reporta_a":"Solange Mata","quadro_id":null},
-    {"nome":"Keite Martins","area":"Coordenação Administrativa e Financeira","reporta_a":"Solange Mata","quadro_id":null},
-    {"nome":"João Silva","area":"Coordenação de Controladoria","reporta_a":"Solange Mata","quadro_id":null},
-    {"nome":"Graziely Palma","area":"Coordenação Contábil e Fiscal","reporta_a":"Solange Mata","quadro_id":null},
-    {"nome":"Vanessa Petri","area":"Coordenação de Suporte ao Cliente","reporta_a":"Lucas Martins","quadro_id":null},
-    {"nome":"Danielle Aquino","area":"Coordenação de Riscos Pessoais e Ramos Elementares","reporta_a":"Lucas Martins","quadro_id":null}
+    {"nome":"Solange Mata","area":"Superintendência de Finanças e Operações","area_curta":"Finanças e Operações","reporta_a":"Egídio","quadro_id":null},
+    {"nome":"Solange Mescouto","area":"Gerência Jurídico, Riscos e Compliance","area_curta":"Jurídico, Riscos e Compliance","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Lucas Martins","area":"Gerência de Operações e Suporte ao Cliente","area_curta":"Operações e Suporte","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Keite Martins","area":"Coordenação Administrativa e Financeira","area_curta":"Adm. e Financeira","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"João Silva","area":"Coordenação de Controladoria","area_curta":"Controladoria","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Graziely Palma","area":"Coordenação Contábil e Fiscal","area_curta":"Contábil e Fiscal","reporta_a":"Solange Mata","quadro_id":null},
+    {"nome":"Vanessa Petri","area":"Coordenação de Suporte ao Cliente","area_curta":"Suporte ao Cliente","reporta_a":"Lucas Martins","quadro_id":null},
+    {"nome":"Danielle Aquino","area":"Coordenação de Riscos Pessoais e Ramos Elementares","area_curta":"Riscos Pessoais e RE","reporta_a":"Lucas Martins","quadro_id":null}
   ],
   "quadros": [
     {"id":"18434047675","tipo":"pagamentos","layout":"por_mes","dono":"Solange Mata"},

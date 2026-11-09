@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { areaCurta } from "@/lib/config";
 import type { ItemEdicao } from "@/lib/edicao/itens";
 import { BotaoItem } from "./botao-item";
 import { Valor } from "./valor";
@@ -24,20 +25,28 @@ export function LinhaItem({ item, children }: { item: ItemEdicao; children: Reac
 }
 
 /**
- * Linha de apoio, sempre começando por quem responde (o gestor): "{gestor} · {extras} · {valor}".
- * Pagamentos: "{gestor} · {valor}". O valor respeita "ocultar valores".
+ * Linha de apoio, sempre em UMA linha e começando por quem responde: "{gestor} · {área curta} · {extras} · {valor}".
+ * Sem espaço, só a área curta é cortada com reticências; nome, extras e valor nunca. O valor respeita "ocultar valores".
  */
 export function MetaItem({ item, extras = [] }: { item: ItemEdicao; extras?: ReactNode[] }) {
-  const partes: ReactNode[] = [item.dono, ...extras];
-  if (typeof item.valor === "number") partes.push(<Valor valor={item.valor} />);
+  const area = areaCurta(item.dono);
+  const fixos: ReactNode[] = [...extras];
+  if (typeof item.valor === "number") fixos.push(<Valor valor={item.valor} />);
   return (
-    <>
-      {partes.map((p, i) => (
+    <span className="flex min-w-0 items-baseline whitespace-nowrap">
+      <span className="shrink-0">{item.dono}</span>
+      {area && (
+        <>
+          <span className="shrink-0">&nbsp;·&nbsp;</span>
+          <span className="min-w-0 truncate">{area}</span>
+        </>
+      )}
+      {fixos.map((p, i) => (
         <Fragment key={i}>
-          {i > 0 && " · "}
-          {p}
+          <span className="shrink-0">&nbsp;·&nbsp;</span>
+          <span className="shrink-0">{p}</span>
         </Fragment>
       ))}
-    </>
+    </span>
   );
 }

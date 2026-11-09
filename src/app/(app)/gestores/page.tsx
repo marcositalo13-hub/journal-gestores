@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { dataPorExtenso } from "@/lib/calendario";
-import { getConfig } from "@/lib/config";
+import { areaCurta, getConfig } from "@/lib/config";
 import { hierarquia, slugDe } from "@/lib/edicao/caderno";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import type { ResumoGestor } from "@/lib/edicao/montar";
@@ -31,8 +31,10 @@ function LinhaGestor({ g, nivel, qs }: { g: ResumoGestor; nivel: number; qs: str
         {/* recuo por nível + fio vertical, como num organograma de jornal */}
         <span className="block min-w-0 flex-1" style={{ paddingLeft: `${nivel * 1.125}rem` }}>
           <span className={cn("block", nivel > 0 && "border-l border-borda pl-3")}>
-            <span className="nome-item">{g.nome}</span>
-            {g.area && <span className="block text-[0.875rem] leading-snug text-tinta-2">{g.area}</span>}
+            <span className="flex min-w-0 items-baseline whitespace-nowrap">
+              <span className="nome-item shrink-0">{g.nome}</span>
+              {areaCurta(g.nome) && <span className="min-w-0 truncate text-base font-normal text-tinta-2">&nbsp;·&nbsp;{areaCurta(g.nome)}</span>}
+            </span>
             <span className="mt-1 block text-[0.9375rem] leading-snug tabular-nums text-tinta">
               <Contagens c={g.contagens} />
             </span>

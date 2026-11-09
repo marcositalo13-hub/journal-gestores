@@ -21,6 +21,8 @@ export interface Manchete {
 export interface Gestor {
   nome: string;
   area: string;
+  /** nome curto da área, exibido junto do nome do gestor nas linhas */
+  area_curta: string;
   reporta_a: string;
   quadro_id: string | null;
   /** WhatsApp só com dígitos, com código do país (ex.: "5561999999999"); opcional */
@@ -142,7 +144,7 @@ export function validarConfig(c: unknown): JornalConfig {
 
   arr("gestores").forEach((g, i) => {
     const x = g as Record<string, unknown>;
-    for (const k of ["nome", "area", "reporta_a"]) {
+    for (const k of ["nome", "area", "area_curta", "reporta_a"]) {
       if (typeof x?.[k] !== "string") erros.push(`gestores[${i}].${k} deve ser string`);
     }
     if (!(x?.quadro_id === null || typeof x?.quadro_id === "string")) erros.push(`gestores[${i}].quadro_id deve ser string ou null`);
@@ -282,4 +284,9 @@ export function gestorDaArea(area: string | null | undefined, cfg: JornalConfig 
   if (!area) return null;
   const a = area.trim();
   return cfg.gestores.find((g) => g.area === a)?.nome ?? null;
+}
+
+/** Área curta do gestor ("Controladoria"), ou null se o nome não está no config (ex.: "Sem área"). */
+export function areaCurta(nome: string | null | undefined, cfg: JornalConfig = getConfig()): string | null {
+  return cfg.gestores.find((g) => g.nome === nome)?.area_curta ?? null;
 }

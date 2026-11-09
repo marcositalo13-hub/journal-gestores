@@ -243,7 +243,7 @@ describe("descendentes", () => {
     expect(descendentes("Ninguém", cfg)).toEqual([]);
   });
   it("não entra em loop com hierarquia circular", () => {
-    const g = (nome: string, reporta_a: string) => ({ nome, area: "x", reporta_a, quadro_id: null });
+    const g = (nome: string, reporta_a: string) => ({ nome, area: "x", area_curta: "x", reporta_a, quadro_id: null });
     const ciclo = { ...cfg, gestores: [g("A", "B"), g("B", "A")] };
     expect(descendentes("A", ciclo)).toEqual(["B"]);
   });

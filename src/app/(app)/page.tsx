@@ -8,7 +8,7 @@ import { PillStatus } from "@/components/pauta/pill-status";
 import { MetaItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
 import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil } from "@/lib/calendario";
-import { getConfig } from "@/lib/config";
+import { areaCurta, getConfig } from "@/lib/config";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import type { ItemEdicao } from "@/lib/edicao/itens";
 import type { DiaSemana } from "@/lib/edicao/montar";
@@ -111,7 +111,10 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
             ) : (
               gruposHoje.map((g) => (
                 <div key={g.nome} className="mt-3">
-                  <h3 className="rotulo-gestor">{g.nome}</h3>
+                  <h3 className="rotulo-gestor">
+                    {g.nome}
+                    {areaCurta(g.nome) && ` · ${areaCurta(g.nome)}`}
+                  </h3>
                   <ul>
                     {g.itens.map((item) => (
                       <Linha key={item.id} item={item}>
