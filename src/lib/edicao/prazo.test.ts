@@ -8,14 +8,13 @@ import { montarEdicao } from "./montar";
 const cfg = getConfig();
 
 // ---------- rule 3: ler.ts (aviso do coletor) ----------
-const qc = { id: "200", tipo: "atividades" as const, dono: "TESTE" };
+const qc = { id: "200", tipo: "atividades" as const, layout: "por_mes" as const, dono: "TESTE" };
 const colunas = [
   { id: "c_tipo", title: "Tipo", type: "status" },
   { id: "c_prazo", title: "Prazo", type: "date" },
   { id: "c_status", title: "Status", type: "status" },
   { id: "c_rec", title: "Recorrência", type: "dropdown" },
-  { id: "c_resp", title: "Responsável", type: "text" },
-  { id: "c_obs", title: "Observação / Bloqueio", type: "text" },
+  { id: "c_obs", title: "Observação", type: "text" },
   { id: "c_chave", title: "Chave", type: "text" },
 ];
 const quadroApi = {
@@ -112,6 +111,7 @@ const quadro = (itens: ItemNormalizado[], dono = "TESTE"): QuadroLido => ({
   nome: "Atividades",
   tipo: "atividades",
   dono,
+  layout: "por_mes",
   hierarchyType: "multi_level",
   grupos: [],
   colunas: {},

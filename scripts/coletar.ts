@@ -4,14 +4,35 @@ import { loadEnvConfig } from "@next/env";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { executarColeta, type RelatorioQuadro } from "../src/lib/coletor/executar";
-import type { QuadroLido } from "../src/lib/coletor/ler";
+import type { Aviso, QuadroLido } from "../src/lib/coletor/ler";
 import type { PlanoQuadro } from "../src/lib/coletor/planejar";
+
+function imprimirPlanoArea(q: QuadroLido, p: PlanoQuadro, avisos: Aviso[]) {
+  const cont = (t: string) => p.acoesArea.filter((a) => a.tipo === t).length;
+  const classes = (c: string) => q.itens.filter((i) => i.porArea?.classe === c).length;
+  console.log(`\n■ ${q.nome} (${q.id}) · ${q.tipo} · por_area · ${q.hierarchyType ?? "?"}`);
+  console.log(
+    `  itens ${q.itens.length} (regras ${classes("regra")} · ocorrências ${classes("ocorrencia")} · únicos ${classes("unico")}) · grupos ${q.grupos.length}\n` +
+      `  area_atualizada ${cont("area_atualizada")} · regra_rotulada ${cont("regra_rotulada")} · seria_criada ${cont("seria_criada")} · seria_finalizado ${cont("seria_finalizado")} · existe ${p.ocorrenciasExistentes} · avisos ${avisos.length}`,
+  );
+  for (const a of avisos) console.log(`  ⚠ [${a.codigo}] ${a.mensagem}`);
+  for (const a of p.acoesArea) {
+    if (a.tipo === "area_atualizada") console.log(`  • area_atualizada  ${a.itemNome} · ${a.areaAtual ?? "(vazia)"} → ${a.area}`);
+    else if (a.tipo === "regra_rotulada") console.log(`  • regra_rotulada   ${a.itemNome} · ${a.statusAtual ?? "(vazio)"} → ${a.status}`);
+    else if (a.tipo === "seria_criada") console.log(`  • seria_criada     ${a.itemNome} · ${a.ocorrencia.dataOriginal} · ${a.grupo.titulo} · ${a.ocorrencia.chave}`);
+    else console.log(`  • seria_finalizado ${a.itemNome} · ${a.status} em ${a.data} → ${a.grupo.titulo}`);
+  }
+}
 
 function imprimirPlano(quadros: QuadroLido[], planos: PlanoQuadro[]) {
   for (const [i, q] of quadros.entries()) {
     const p = planos[i];
     const avisos = [...q.avisos, ...p.avisos];
     const cont = (t: string) => p.acoes.filter((a) => a.tipo === t).length;
+    if (q.layout === "por_area") {
+      imprimirPlanoArea(q, p, avisos);
+      continue;
+    }
     console.log(`\n■ ${q.nome} (${q.id}) · ${q.tipo} · dono ${q.dono} · ${q.hierarchyType ?? "?"}`);
     console.log(
       `  itens ${q.itens.length} (Cadastro ${q.itens.filter((x) => x.noCadastro).length}) · grupos ${q.grupos.map((g) => g.titulo).join(" › ")}\n` +
@@ -34,10 +55,12 @@ function imprimirRelatorio(r: RelatorioQuadro) {
 ▶ ${r.quadroNome} (${r.quadroId})`);
   for (const g of r.gruposCriados) console.log(`  + grupo     ${g.titulo} (${g.id})`);
   for (const g of r.gruposReordenados) console.log(`  ↕ grupo     ${g.titulo} → depois de ${g.depoisDe}`);
+  for (const a of r.areasAtualizadas) console.log(`  ≡ área      ${a.nome} → ${a.area}`);
+  for (const a of r.regrasRotuladas) console.log(`  ≡ regra     ${a.nome} → ${a.status}`);
   for (const i of r.itensCriados) console.log(`  + item      ${i.nome} · ${i.data} · ${i.grupo} · ${i.chave} · id ${i.id}`);
   for (const i of r.itensMovidos) console.log(`  → movido    ${i.nome} (${i.id}) → ${i.grupo}`);
   for (const f of r.falhas) console.log(`  ✗ ${f.acao} · ${f.alvo} · ${f.erro}`);
-  if (!r.gruposCriados.length && !r.gruposReordenados.length && !r.itensCriados.length && !r.itensMovidos.length && !r.falhas.length) {
+  if (![r.gruposCriados, r.gruposReordenados, r.areasAtualizadas, r.regrasRotuladas, r.itensCriados, r.itensMovidos, r.falhas].some((l) => l.length)) {
     console.log("  (nada a fazer)");
   }
 }

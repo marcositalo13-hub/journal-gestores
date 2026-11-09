@@ -1,12 +1,15 @@
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaCoordenacao, type JornalConfig, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
+import { getConfig, gestorDaArea, gestorDaCoordenacao, type JornalConfig, type LayoutQuadro, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
 import { mondayQuery } from "../monday/client";
+import { parseFrequencia } from "../recorrencia";
+import { mesmoRotulo, parseRotulosDaColuna, resolverRotulo, type RotuloColuna } from "../rotulos";
 
 // ---------- tipos crus da API ----------
 interface ColunaApi {
   id: string;
   title: string;
   type: string;
+  settings_str?: string | null;
   capabilities?: { calculated?: { function?: string | null } | null } | null;
 }
 interface ValorApi {
@@ -52,6 +55,10 @@ export interface Aviso {
     | "tipo_coluna_errado"
     | "rollup_ativo"
     | "grupo_cadastro_ausente"
+    | "grupo_finalizadas_ausente"
+    | "rotulo_nao_encontrado"
+    | "recorrencia_diaria_nao_suportada"
+    | "item_sem_area"
     | "obrigatoria_vazia"
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
@@ -79,6 +86,21 @@ export interface ColunaMapeada {
   id: string;
   /** tipo real no monday (ex.: "long_text") */
   type: string;
+  /** título da coluna (para mensagens) */
+  titulo?: string;
+  /** rótulos atuais de uma coluna status/dropdown, com os IDs usados nas gravações */
+  rotulos?: RotuloColuna[];
+}
+
+/** Quadros por_area. Regra: recorrente sem Chave. Ocorrência: tem Chave. Único: o resto. */
+export type ClasseItem = "regra" | "ocorrencia" | "unico";
+
+export interface DadosPorArea {
+  classe: ClasseItem;
+  /** área do grupo em que o item está; null no grupo de finalizadas ou em grupo desconhecido */
+  areaGrupo: string | null;
+  /** está no grupo de finalizadas? */
+  finalizada: boolean;
 }
 
 export interface ItemNormalizado {
@@ -99,12 +121,15 @@ export interface ItemNormalizado {
   etapas: { total: number; concluidas: number } | null;
   /** datas dos subitens não cancelados (YYYY-MM-DD), para detectar prazo movido para os subitens */
   datasSubitens: string[];
+  /** presente só em quadros por_area */
+  porArea?: DadosPorArea;
 }
 
 export interface QuadroLido {
   id: string;
   nome: string;
   tipo: TipoQuadro;
+  layout: LayoutQuadro;
   dono: string;
   hierarchyType: string | null;
   /** grupos na ordem do quadro (por position) */
@@ -132,7 +157,7 @@ const Q_QUADRO = `
 query ($ids: [ID!]) {
   boards(ids: $ids) {
     id name hierarchy_type
-    columns { id title type capabilities { calculated { function } } }
+    columns { id title type settings_str capabilities { calculated { function } } }
     groups { id title position }
     items_page(limit: 100) { cursor items { ${ITEM_FIELDS} } }
   }
@@ -208,7 +233,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     }
     if (achadas.length > 1) av({ codigo: "coluna_ausente", mensagem: `Coluna "${titulo}" aparece ${achadas.length}x; usando a primeira (${col.id}).` });
     idPorTitulo[titulo] = col.id;
-    colunas[titulo] = { id: col.id, type: col.type };
+    colunas[titulo] = { id: col.id, type: col.type, titulo, rotulos: parseRotulosDaColuna(col.type, col.settings_str) };
     if (!TIPOS_ACEITOS[tipoEsperado].includes(col.type)) {
       av({ codigo: "tipo_coluna_errado", mensagem: `Coluna "${titulo}" é "${col.type}", esperado "${tipoEsperado}".` });
     }
@@ -218,8 +243,23 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     }
   }
 
-  if (!quadro.groups.some((g) => g.title.trim() === cfg.grupo_cadastro)) {
+  // Rótulos que o coletor GRAVA precisam existir (pelo nome normalizado); senão a gravação é pulada.
+  const exigeRotulo = (titulo: string, nome: string | undefined) => {
+    const col = colunas[titulo];
+    if (!nome || !col || resolverRotulo(col.rotulos, nome)) return;
+    av({ codigo: "rotulo_nao_encontrado", mensagem: `Rótulo "${nome}" não existe na coluna "${titulo}"; as gravações que o usam serão puladas.` });
+  };
+  exigeRotulo(tipoCfg.status, tipoCfg.status_inicial);
+  const porArea = qc.layout === "por_area";
+  if (porArea) {
+    exigeRotulo(tipoCfg.status, tipoCfg.status_regra);
+    for (const g of cfg.gestores) exigeRotulo("Área", g.area);
+  }
+  if (!porArea && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_cadastro)) {
     av({ codigo: "grupo_cadastro_ausente", mensagem: `Grupo "${cfg.grupo_cadastro}" não existe no quadro.` });
+  }
+  if (porArea && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_finalizadas)) {
+    av({ codigo: "grupo_finalizadas_ausente", mensagem: `Grupo "${cfg.grupo_finalizadas}" não existe no quadro; nada será finalizado.` });
   }
 
   const itens: ItemNormalizado[] = itensApi.map((it) => {
@@ -237,7 +277,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       url: it.url,
       updatedAt: it.updated_at,
       grupo,
-      noCadastro: grupo.titulo === cfg.grupo_cadastro,
+      noCadastro: !porArea && grupo.titulo === cfg.grupo_cadastro,
       valores,
       data: valores[tipoCfg.data]?.date ?? null,
       status: valores[tipoCfg.status]?.label ?? null,
@@ -247,6 +287,13 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       etapas: contarEtapas(it.subitems ?? [], tipoCfg.status, tipoCfg.status_concluido, tipoCfg.status_cancelado),
       datasSubitens: datasDeSubitens(it.subitems ?? [], tipoCfg.data, tipoCfg.status, tipoCfg.status_cancelado),
     };
+    if (porArea) {
+      n.porArea = {
+        classe: classificarItem(n.recorrencia, n.chave),
+        areaGrupo: gestorDaArea(grupo.titulo, cfg) ? grupo.titulo : null,
+        finalizada: grupo.titulo === cfg.grupo_finalizadas,
+      };
+    }
 
     const ctx = { itemId: n.id, itemNome: n.nome };
     for (const ob of tipoCfg.obrigatorias) {
@@ -255,7 +302,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
         av({ ...ctx, codigo: "obrigatoria_vazia", mensagem: `"${n.nome}": campo obrigatório "${ob}" vazio.` });
       }
     }
-    if (n.status === tipoCfg.status_travado && vazio(n.motivo)) {
+    if (mesmoRotulo(n.status, tipoCfg.status_travado) && vazio(n.motivo)) {
       av({ ...ctx, codigo: "travado_sem_motivo", mensagem: `"${n.nome}": status "${tipoCfg.status_travado}" sem motivo em "${tipoCfg.campo_motivo}".` });
     }
     if (n.noCadastro && idPorTitulo["Recorrência"] && vazio(n.recorrencia)) {
@@ -274,6 +321,9 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
         });
       }
     }
+    if (n.porArea?.finalizada && n.porArea.classe !== "regra" && !gestorDaArea(areaDaColuna(n, cfg), cfg)) {
+      av({ ...ctx, codigo: "item_sem_area", mensagem: `"${n.nome}": sem "Área" em "${cfg.grupo_finalizadas}"; ficará como "Sem área" na edição.` });
+    }
     if (!n.noCadastro && !n.data && n.datasSubitens.length) {
       av({
         ...ctx,
@@ -284,13 +334,17 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     return n;
   });
 
-  for (const d of detectarChavesDuplicadas(itens, cfg)) {
-    av({ codigo: "chave_duplicada", mensagem: `Chave "${d.chave}" repetida em ${d.itens.length} itens de grupos de mês: ${d.itens.map((i) => `${i.id} (${i.grupo})`).join(", ")}. Corrija manualmente.` });
+  for (const d of detectarChavesDuplicadas(itens, cfg, qc.layout)) {
+    av({ codigo: "chave_duplicada", mensagem: `Chave "${d.chave}" repetida em ${d.itens.length} itens${porArea ? "" : " de grupos de mês"}: ${d.itens.map((i) => `${i.id} (${i.grupo})`).join(", ")}. Corrija manualmente.` });
   }
   const comItens = new Set(itens.map((i) => i.grupo.titulo));
   for (const g of quadro.groups) {
     const t = g.title.trim();
-    if (t !== cfg.grupo_cadastro && !parseGrupoMes(t, cfg) && comItens.has(t)) {
+    if (porArea) {
+      if (t !== cfg.grupo_finalizadas && !gestorDaArea(t, cfg)) {
+        av({ codigo: "grupo_desconhecido", mensagem: `Grupo "${t}" não é uma área do config nem "${cfg.grupo_finalizadas}"; seus itens são ignorados.` });
+      }
+    } else if (t !== cfg.grupo_cadastro && !parseGrupoMes(t, cfg) && comItens.has(t)) {
       av({ codigo: "grupo_desconhecido", mensagem: `Grupo "${t}" não é "${cfg.grupo_cadastro}" nem um mês válido, mas tem itens.` });
     }
   }
@@ -299,6 +353,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     id: quadro.id,
     nome: quadro.name,
     tipo: qc.tipo,
+    layout: qc.layout,
     dono: qc.dono,
     hierarchyType: quadro.hierarchy_type,
     grupos: ordenarPorPosicao(quadro.groups).map((g) => ({ id: g.id, titulo: g.title.trim() })),
@@ -306,6 +361,20 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     itens,
     avisos,
   };
+}
+
+/** Regra: recorrência válida e Chave vazia. Ocorrência: tem Chave. Único: o resto (inclui "Não recorrente" e vazio). */
+export function classificarItem(recorrencia: string | null, chave: string | null): ClasseItem {
+  if (chave && chave.trim()) return "ocorrencia";
+  const f = parseFrequencia(recorrencia);
+  return f !== null && f !== "nao_recorrente" && f !== "diaria" ? "regra" : "unico";
+}
+
+/** Área preenchida na coluna Área (primeiro rótulo que é uma área do config), ou null. */
+export function areaDaColuna(it: Pick<ItemNormalizado, "valores">, cfg: JornalConfig = getConfig()): string | null {
+  const v = it.valores["Área"];
+  const rotulos = v?.labels?.length ? v.labels : v?.text ? [v.text] : [];
+  return rotulos.find((r) => gestorDaArea(r, cfg)) ?? null;
 }
 
 /** Conta subitens pelo status (coluna localizada pelo TÍTULO, como no resto do coletor). */
@@ -320,9 +389,9 @@ export function contarEtapas(
   for (const s of subitens) {
     const v = s.column_values.find((c) => c.column?.title?.trim() === tituloStatus);
     const label = (v?.label ?? v?.text ?? "").trim();
-    if (label === statusCancelado) continue;
+    if (mesmoRotulo(label, statusCancelado)) continue;
     total++;
-    if (label === statusConcluido) concluidas++;
+    if (mesmoRotulo(label, statusConcluido)) concluidas++;
   }
   return total > 0 ? { total, concluidas } : null;
 }
@@ -332,7 +401,7 @@ export function datasDeSubitens(subitens: SubitemApi[], tituloData: string, titu
   const out: string[] = [];
   for (const s of subitens) {
     const st = s.column_values.find((c) => c.column?.title?.trim() === tituloStatus);
-    if ((st?.label ?? st?.text ?? "").trim() === statusCancelado) continue;
+    if (mesmoRotulo(st?.label ?? st?.text, statusCancelado)) continue;
     const d = s.column_values.find((c) => c.column?.title?.trim() === tituloData)?.date;
     if (d) out.push(d);
   }
@@ -347,14 +416,15 @@ export function ordenarPorPosicao<G extends { position: string | null }>(grupos:
     .map((x) => x.g);
 }
 
-/** Itens em grupos de mês que compartilham a mesma Chave (nunca corrige nada). */
+/** Itens que compartilham a mesma Chave: em grupos de mês (por_mes) ou no quadro inteiro (por_area). Nunca corrige nada. */
 export function detectarChavesDuplicadas(
   itens: Pick<ItemNormalizado, "id" | "chave" | "grupo">[],
   cfg: JornalConfig = getConfig(),
+  layout: LayoutQuadro = "por_mes",
 ): { chave: string; itens: { id: string; grupo: string }[] }[] {
   const porChave = new Map<string, { id: string; grupo: string }[]>();
   for (const it of itens) {
-    if (!it.chave || !parseGrupoMes(it.grupo.titulo, cfg)) continue;
+    if (!it.chave || (layout === "por_mes" && !parseGrupoMes(it.grupo.titulo, cfg))) continue;
     porChave.set(it.chave, [...(porChave.get(it.chave) ?? []), { id: it.id, grupo: it.grupo.titulo }]);
   }
   return [...porChave].filter(([, l]) => l.length > 1).map(([chave, l]) => ({ chave, itens: l }));
@@ -371,6 +441,7 @@ export async function lerQuadros(cfg: JornalConfig = getConfig()): Promise<Quadr
         id: qc.id,
         nome: "(não encontrado)",
         tipo: qc.tipo,
+        layout: qc.layout,
         dono: qc.dono,
         hierarchyType: null,
         grupos: [],

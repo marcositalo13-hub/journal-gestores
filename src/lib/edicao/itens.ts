@@ -1,9 +1,10 @@
 // Transforma a leitura dos quadros (ler.ts) em itens prontos para montar a edição.
 // Puro: sem rede. Nunca expõe URLs do monday.
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaCoordenacao, type JornalConfig, type TipoQuadro } from "../config";
+import { getConfig, gestorDaArea, gestorDaCoordenacao, type JornalConfig, type TipoQuadro } from "../config";
 import { parseFrequencia } from "../recorrencia";
-import type { ItemNormalizado, QuadroLido } from "../coletor/ler";
+import { mesmoRotulo } from "../rotulos";
+import { areaDaColuna, type ItemNormalizado, type QuadroLido } from "../coletor/ler";
 
 export type TipoItem = "Atividade" | "Entrega" | "Contrato" | "Pagamento";
 export type Categoria = "aberto" | "concluido" | "travado" | "cancelado";
@@ -25,7 +26,6 @@ export interface ItemJornal {
   valor?: number;
   favorecido?: string;
   coordenacao?: string;
-  responsavel?: string;
   observacao?: string;
   recorrencia?: string;
   chave?: string;
@@ -49,20 +49,28 @@ const TIPOS_ITEM: TipoItem[] = ["Atividade", "Entrega", "Contrato", "Pagamento"]
 export function categoriaDoStatus(status: string | null, tipo: TipoQuadro, cfg: JornalConfig = getConfig()): Categoria {
   const t = cfg.tipos_de_quadro[tipo];
   const s = (status ?? "").trim();
-  if (s === t.status_concluido) return "concluido";
-  if (s === t.status_travado) return "travado";
-  if (s === t.status_cancelado) return "cancelado";
+  if (mesmoRotulo(s, t.status_concluido)) return "concluido";
+  if (mesmoRotulo(s, t.status_travado)) return "travado";
+  if (mesmoRotulo(s, t.status_cancelado)) return "cancelado";
   return "aberto"; // Previsto / Não iniciado / Em andamento / sem status
 }
 
 function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro): TipoItem {
   if (tipoQuadro === "pagamentos") return "Pagamento";
   const rotulo = it.valores["Tipo"]?.label?.trim();
-  return TIPOS_ITEM.find((t) => t === rotulo) ?? "Atividade";
+  return TIPOS_ITEM.find((t) => mesmoRotulo(t, rotulo)) ?? "Atividade";
 }
 
-/** O item entra na edição? Ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro. */
+/** Dono de um item sem área identificável em quadro por_area. */
+export const SEM_AREA = "Sem área";
+
+/**
+ * O item entra na edição?
+ * por_mes: ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro.
+ * por_area: ocorrências e únicos dos grupos de área e de finalizadas (regras nunca).
+ */
 function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
+  if (it.porArea) return it.porArea.classe !== "regra" && (it.porArea.areaGrupo !== null || it.porArea.finalizada);
   if (it.noCadastro) return parseFrequencia(it.recorrencia) === "nao_recorrente"; // regras recorrentes já têm ocorrências
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
 }
@@ -73,8 +81,12 @@ export function rotulosDaCoordenacao(v: { labels: string[] | null; text: string 
   return v.labels?.length ? v.labels : v.text ? v.text.split(",").map((x) => x.trim()).filter(Boolean) : [];
 }
 
-/** Quem responde: nos Pagamentos, o gestor da coordenação; sem coordenação (ou desconhecida), o dono do quadro. */
+/**
+ * Quem responde. por_area: o gestor da coluna Área; vazia, o da área do grupo; senão "Sem área".
+ * Pagamentos: o gestor da coordenação; sem coordenação (ou desconhecida), o dono do quadro.
+ */
 export function donoDoItem(it: ItemNormalizado, q: Pick<QuadroLido, "tipo" | "dono">, cfg: JornalConfig = getConfig()): string {
+  if (it.porArea) return gestorDaArea(areaDaColuna(it, cfg), cfg) ?? gestorDaArea(it.porArea.areaGrupo, cfg) ?? SEM_AREA;
   if (q.tipo !== "pagamentos") return q.dono;
   return gestorDaCoordenacao(rotulosDaCoordenacao(it.valores["Coordenação"]), cfg) ?? q.dono;
 }
@@ -109,7 +121,6 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         ...(typeof valor === "number" ? { valor } : {}),
         ...(txt(it.valores["Favorecido"]?.text) ? { favorecido: txt(it.valores["Favorecido"]?.text) } : {}),
         ...(txt(coordenacao) ? { coordenacao: txt(coordenacao) } : {}),
-        ...(txt(it.valores["Responsável"]?.text) ? { responsavel: txt(it.valores["Responsável"]?.text) } : {}),
         ...(txt(it.valores[tcfg.campo_motivo]?.text) ? { observacao: txt(it.valores[tcfg.campo_motivo]?.text) } : {}),
         ...(txt(it.recorrencia) ? { recorrencia: txt(it.recorrencia) } : {}),
         ...(txt(it.chave) ? { chave: txt(it.chave) } : {}),

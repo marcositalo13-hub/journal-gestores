@@ -32,7 +32,7 @@ const quadro = (tipo: QuadroLido["tipo"], itens: ItemNormalizado[]): QuadroLido 
   nome: "Q",
   tipo,
   dono: "Solange Mata",
-  hierarquia: undefined,
+  layout: "por_mes",
   hierarchyType: "multi_level",
   grupos: [],
   colunas: {},
@@ -120,7 +120,7 @@ const api = (id: string, coordTexto: string | null, grupo = "Outubro 2026") => (
 });
 const avisos = (itens: ReturnType<typeof api>[], colunasUsadas = colunas) =>
   normalizarQuadro(
-    { id: "100", tipo: "pagamentos", dono: "Solange Mata" },
+    { id: "100", tipo: "pagamentos", layout: "por_mes", dono: "Solange Mata" },
     { id: "100", name: "Pagamentos", hierarchy_type: "multi_level", columns: colunasUsadas, groups: [{ id: "g", title: "Outubro 2026", position: "1" }], items_page: { cursor: null, items: [] } },
     itens,
     cfg,
@@ -144,7 +144,7 @@ describe("aviso pagamento_sem_coordenacao (ler.ts)", () => {
   });
   it("só vale para o quadro de Pagamentos", () => {
     const r = normalizarQuadro(
-      { id: "200", tipo: "atividades", dono: "TESTE" },
+      { id: "200", tipo: "atividades", layout: "por_mes", dono: "TESTE" },
       { id: "200", name: "Atividades", hierarchy_type: "multi_level", columns: [{ id: "c_prazo", title: "Prazo", type: "date" }], groups: [], items_page: { cursor: null, items: [] } },
       [],
       cfg,

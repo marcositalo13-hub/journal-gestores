@@ -88,7 +88,6 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                 {item.dono}
                 {gestor?.area && <span className="text-tinta-2"> ({gestor.area})</span>}
               </Campo>
-              {item.responsavel && <Campo rotulo="Executor">{item.responsavel}</Campo>}
               {item.observacao && <Campo rotulo="Observação">{item.observacao}</Campo>}
               {item.recorrencia && <Campo rotulo="Recorrência">{item.recorrencia}</Campo>}
               {typeof item.valor === "number" && (

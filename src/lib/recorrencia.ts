@@ -10,6 +10,7 @@ import {
   ultimoDiaDoMes,
   type DataISO,
 } from "./calendario";
+import { normalizarRotulo } from "./rotulos";
 import { getConfig, type AjusteDiaNaoUtil, type JornalConfig } from "./config";
 
 export type Frequencia = "Semanal" | "Quinzenal" | "Mensal" | "Anual";
@@ -38,17 +39,20 @@ export interface Ocorrencia {
   avisarEm?: DataISO;
 }
 
-const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
 
-/** Converte o texto da coluna Recorrência; "nao_recorrente", ou null se desconhecido/vazio. */
-export function parseFrequencia(texto: string | null | undefined): Frequencia | "nao_recorrente" | null {
-  const t = semAcento(texto ?? "");
+/**
+ * Converte o rótulo da coluna Recorrência. Tolera renomeações: espaços, prefixo numérico ("4. ", "4 - ", "4)"),
+ * maiúsculas e acentos são ignorados. "diaria" é reconhecida mas não suportada; null = desconhecido ou vazio.
+ */
+export function parseFrequencia(texto: string | null | undefined): Frequencia | "nao_recorrente" | "diaria" | null {
+  const t = normalizarRotulo(texto);
   if (!t) return null;
-  const mapa: Record<string, Frequencia | "nao_recorrente"> = {
+  const mapa: Record<string, Frequencia | "nao_recorrente" | "diaria"> = {
     semanal: "Semanal",
     quinzenal: "Quinzenal",
     mensal: "Mensal",
     anual: "Anual",
+    diaria: "diaria",
     "nao recorrente": "nao_recorrente",
   };
   return mapa[t] ?? null;

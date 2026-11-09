@@ -60,4 +60,12 @@ describe("parseFrequencia", () => {
     expect(parseFrequencia("")).toBeNull();
     expect(parseFrequencia("Bimestral")).toBeNull();
   });
+
+  it("aceita os rótulos numerados do quadro de Atividades", () => {
+    expect(parseFrequencia("4. Mensal")).toBe("Mensal");
+    expect(parseFrequencia("3. Quinzenal")).toBe("Quinzenal");
+    expect(parseFrequencia("5. Anual")).toBe("Anual");
+    expect(parseFrequencia("1. Não recorrente")).toBe("nao_recorrente");
+    expect(parseFrequencia("2. Diária")).toBe("diaria"); // reconhecida, mas sem projeção diária
+  });
 });

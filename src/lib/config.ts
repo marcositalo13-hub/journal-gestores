@@ -2,6 +2,8 @@ import raw from "../../config/jornal.config.json";
 
 export type TipoQuadro = "atividades" | "pagamentos";
 export type TipoColuna = "status" | "date" | "dropdown" | "text" | "numbers";
+/** por_mes: Cadastro + grupos de mês. por_area: um grupo por área + grupo de finalizadas. */
+export type LayoutQuadro = "por_mes" | "por_area";
 export type AjusteDiaNaoUtil = "manter_e_avisar" | "dia_util_mais_proximo";
 
 export interface Leitor {
@@ -28,6 +30,7 @@ export interface Gestor {
 export interface QuadroConfig {
   id: string;
   tipo: TipoQuadro;
+  layout: LayoutQuadro;
   dono: string;
 }
 
@@ -40,6 +43,8 @@ export interface TipoQuadroConfig {
   status_travado: string;
   status_cancelado: string;
   status_inicial: string;
+  /** só em quadros por_area: rótulo que marca um item como regra de recorrência */
+  status_regra?: string;
   campo_motivo: string;
   ajuste_dia_nao_util: AjusteDiaNaoUtil;
 }
@@ -56,6 +61,10 @@ export interface JornalConfig {
   quadros: QuadroConfig[];
   quadros_ignorados: string[];
   grupo_cadastro: string;
+  /** por_area: grupo final de itens concluídos/cancelados e de recorrências encerradas */
+  grupo_finalizadas: string;
+  /** por_area: dias após o prazo para mover concluídos/cancelados ao grupo de finalizadas */
+  finalizar_apos_dias: number;
   formato_grupo_mes: string;
   tipos_de_quadro: Record<TipoQuadro, TipoQuadroConfig>;
   empate_dia_util: "anterior" | "posterior";
@@ -99,7 +108,10 @@ export function validarConfig(c: unknown): JornalConfig {
     return o[k] as unknown[];
   };
 
-  ["timezone", "workspace_id", "diretor", "grupo_cadastro", "formato_grupo_mes"].forEach(str);
+  ["timezone", "workspace_id", "diretor", "grupo_cadastro", "grupo_finalizadas", "formato_grupo_mes"].forEach(str);
+  if (typeof o.finalizar_apos_dias !== "number" || !Number.isInteger(o.finalizar_apos_dias) || o.finalizar_apos_dias < 0) {
+    erros.push(`"finalizar_apos_dias" deve ser inteiro >= 0`);
+  }
 
   if (typeof o.timezone === "string") {
     try {
@@ -139,6 +151,13 @@ export function validarConfig(c: unknown): JornalConfig {
     }
   });
 
+  // Área → gestor precisa ser 1:1, e o grupo de finalizadas não pode se confundir com uma área.
+  const areas = arr("gestores").map((g) => (g as Record<string, unknown>)?.area);
+  areas.forEach((a, i) => {
+    if (areas.indexOf(a) !== i) erros.push(`gestores[${i}].area duplicada: ${String(a)}`);
+  });
+  if (areas.includes(o.grupo_finalizadas)) erros.push(`"grupo_finalizadas" não pode ser igual à área de um gestor`);
+
   const nomesGestores = new Set(arr("gestores").map((g) => (g as Record<string, unknown>)?.nome));
   if (typeof o.coordenacoes !== "object" || o.coordenacoes === null || Array.isArray(o.coordenacoes)) erros.push(`"coordenacoes" deve ser objeto { coordenação: gestor }`);
   else {
@@ -163,6 +182,12 @@ export function validarConfig(c: unknown): JornalConfig {
     }
     if (!TIPOS_QUADRO.includes(x?.tipo as TipoQuadro)) erros.push(`quadros[${i}].tipo inválido: ${String(x?.tipo)}`);
     if (typeof x?.dono !== "string") erros.push(`quadros[${i}].dono deve ser string`);
+    if (x?.layout !== "por_mes" && x?.layout !== "por_area") erros.push(`quadros[${i}].layout deve ser "por_mes" ou "por_area": ${String(x?.layout)}`);
+    if (x?.layout === "por_area") {
+      const t = ((o.tipos_de_quadro ?? {}) as Record<string, Record<string, unknown> | undefined>)[String(x?.tipo)];
+      if (typeof t?.status_regra !== "string") erros.push(`quadros[${i}]: layout por_area exige tipos_de_quadro.${String(x?.tipo)}.status_regra`);
+      if (!(t?.colunas && "Área" in (t.colunas as object))) erros.push(`quadros[${i}]: layout por_area exige a coluna "Área" em tipos_de_quadro.${String(x?.tipo)}.colunas`);
+    }
   });
 
   const tipos = (o.tipos_de_quadro ?? {}) as Record<string, unknown>;
@@ -250,4 +275,11 @@ export function gestorDaCoordenacao(rotulos: string[] | null | undefined, cfg: J
     if (g) return g;
   }
   return null;
+}
+
+/** Gestor que responde por uma área (título do grupo ou rótulo da coluna Área), ou null. */
+export function gestorDaArea(area: string | null | undefined, cfg: JornalConfig = getConfig()): string | null {
+  if (!area) return null;
+  const a = area.trim();
+  return cfg.gestores.find((g) => g.area === a)?.nome ?? null;
 }

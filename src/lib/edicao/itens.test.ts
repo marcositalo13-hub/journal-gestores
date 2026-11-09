@@ -31,6 +31,7 @@ const quadro = (tipo: QuadroLido["tipo"], itens: ItemNormalizado[], dono = "Sola
   nome: "Q",
   tipo,
   dono,
+  layout: "por_mes",
   hierarchyType: "multi_level",
   grupos: [],
   colunas: {},
@@ -111,18 +112,18 @@ describe("campos copiados", () => {
     });
   });
 
-  it("atividades: responsável e observação / bloqueio; vazios ficam ausentes; etapas só se houver", () => {
+  it("atividades: observação; vazios ficam ausentes; etapas só se houver; coluna opcional ausente não quebra", () => {
     const q = quadro(
       "atividades",
       [
-        item({ valores: { Responsável: v({ text: "Ana" }), "Observação / Bloqueio": v({ text: "Aguardando" }) }, etapas: { total: 4, concluidas: 1 } }),
-        item({ valores: { Responsável: v({ text: "" }) } }),
+        item({ valores: { Observação: v({ text: "Aguardando" }) }, etapas: { total: 4, concluidas: 1 } }),
+        item({ valores: { Observação: null } }),
       ],
       "TESTE",
     );
     const [a, b] = itensDe([q]);
-    expect(a).toMatchObject({ responsavel: "Ana", observacao: "Aguardando", etapas: { total: 4, concluidas: 1 }, dono: "TESTE" });
-    expect(b).not.toHaveProperty("responsavel");
+    expect(a).toMatchObject({ observacao: "Aguardando", etapas: { total: 4, concluidas: 1 }, dono: "TESTE" });
+    expect(b).not.toHaveProperty("observacao");
     expect(b).not.toHaveProperty("etapas");
     expect(b).not.toHaveProperty("valor");
   });

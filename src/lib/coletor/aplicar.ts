@@ -1,24 +1,37 @@
-// Executa um PlanoQuadro no monday: cria grupos de mês, cria ocorrências e move itens avulsos.
-// Nunca apaga nem altera colunas de itens existentes.
+// Executa um PlanoQuadro no monday.
+// por_mes: cria grupos de mês, cria ocorrências e move itens avulsos (sem alterar colunas de itens existentes).
+// por_area: preenche Área, rotula regras, cria ocorrências e move encerrados. Nunca apaga nada.
 import { ddmm, nomeDiaDaSemana, parseGrupoMes } from "../calendario";
 import { getConfig, type JornalConfig, type TipoQuadro } from "../config";
 import { mondayMutation, mondayQuery } from "../monday/client";
 import type { Ocorrencia } from "../recorrencia";
+import { RotuloNaoResolvido, resolverRotulo } from "../rotulos";
 import { ordenarPorPosicao, type ColunaMapeada, type ItemNormalizado, type QuadroLido } from "./ler";
 import type { PlanoQuadro } from "./planejar";
 
 
 // ---------- funções puras ----------
 
-/** Valor no formato JSON do monday para o tipo REAL da coluna. */
-function valorMonday(type: string, v: { text?: string; label?: string; date?: string; number?: number; labels?: string[] }): unknown {
-  switch (type) {
+/**
+ * Valor no formato JSON do monday para o tipo REAL da coluna.
+ * Status e dropdown são gravados pelo ID do rótulo ({index} / {ids}), resolvido nos rótulos ATUAIS
+ * da coluna com o mesmo critério de comparação (sem prefixo numérico, caixa ou acento).
+ * Rótulo que não existe mais → RotuloNaoResolvido (a gravação é pulada e registrada como falha).
+ */
+export function valorMonday(col: ColunaMapeada, v: { text?: string; label?: string; date?: string; number?: number; labels?: string[] }): unknown {
+  const nome = col.titulo ?? col.id;
+  const id = (rotulo: string) => {
+    const r = resolverRotulo(col.rotulos, rotulo);
+    if (!r) throw new RotuloNaoResolvido(nome, rotulo);
+    return r.id;
+  };
+  switch (col.type) {
     case "status":
-      return { label: v.label ?? v.text };
+      return { index: id(v.label ?? v.text ?? "") };
     case "date":
       return { date: v.date };
     case "dropdown":
-      return { labels: v.labels ?? (v.text ? v.text.split(", ") : []) };
+      return { ids: (v.labels ?? (v.text ? v.text.split(", ") : [])).map(id) };
     case "numbers":
       return String(v.number ?? v.text);
     case "long_text":
@@ -54,7 +67,7 @@ export function montarColumnValues(
     if (!col || proprias.has(titulo) || !v) continue;
     const vazio = v.text === "" && v.number === null && !v.labels?.length && !v.label && !v.date;
     if (vazio) continue;
-    out[col.id] = valorMonday(col.type, {
+    out[col.id] = valorMonday(col, {
       text: v.text,
       label: v.label ?? undefined,
       date: v.date ?? undefined,
@@ -65,13 +78,44 @@ export function montarColumnValues(
 
   const set = (titulo: string, v: Parameters<typeof valorMonday>[1]) => {
     const col = colunas[titulo];
-    if (col) out[col.id] = valorMonday(col.type, v);
+    if (col) out[col.id] = valorMonday(col, v);
   };
   set(t.data, { date: oc.dataEfetiva });
   set(t.status, { label: t.status_inicial });
   set("Chave", { text: oc.chave });
   const ajuste = textoAjusteData(oc);
   if (ajuste) set(t.campo_motivo, { text: ajuste });
+  return out;
+}
+
+/**
+ * column_values de uma ocorrência em quadro por_area: copia Tipo e Recorrência da regra;
+ * Status inicial, Prazo = data original, Chave e Área são definidos para a ocorrência.
+ */
+export function montarColumnValuesArea(
+  regra: Pick<ItemNormalizado, "valores">,
+  oc: Ocorrencia,
+  area: string,
+  tipo: TipoQuadro,
+  colunas: Record<string, ColunaMapeada | null>,
+  cfg: JornalConfig = getConfig(),
+): Record<string, unknown> {
+  const t = cfg.tipos_de_quadro[tipo];
+  const out: Record<string, unknown> = {};
+  const set = (titulo: string, v: Parameters<typeof valorMonday>[1]) => {
+    const col = colunas[titulo];
+    if (col) out[col.id] = valorMonday(col, v);
+  };
+  const tipoItem = regra.valores["Tipo"]?.label;
+  if (tipoItem) set("Tipo", { label: tipoItem });
+  const recorrencia = regra.valores["Recorrência"]?.labels;
+  if (recorrencia?.length) set("Recorrência", { labels: recorrencia });
+  const obs = regra.valores[t.campo_motivo]?.text;
+  if (obs) set(t.campo_motivo, { text: obs }); // o contexto escrito na regra acompanha cada ocorrência
+  set(t.status, { label: t.status_inicial });
+  set(t.data, { date: oc.dataOriginal });
+  set("Chave", { text: oc.chave });
+  set("Área", { labels: [area] });
   return out;
 }
 
@@ -132,6 +176,10 @@ export interface RelatorioAplicacao {
   gruposReordenados: { titulo: string; depoisDe: string }[];
   itensCriados: { nome: string; data: string; chave: string; id: string; grupo: string }[];
   itensMovidos: { nome: string; id: string; grupo: string }[];
+  /** por_area */
+  areasAtualizadas: { nome: string; id: string; area: string }[];
+  /** por_area */
+  regrasRotuladas: { nome: string; id: string; status: string }[];
   falhas: { acao: string; alvo: string; erro: string }[];
 }
 
@@ -152,6 +200,11 @@ mutation ($item_id: ID!, $group_id: String!) {
   move_item_to_group(item_id: $item_id, group_id: $group_id) { id }
 }`;
 
+const M_ATUALIZAR_COLUNAS = `
+mutation ($board_id: ID!, $item_id: ID!, $valores: JSON!) {
+  change_multiple_column_values(board_id: $board_id, item_id: $item_id, column_values: $valores) { id }
+}`;
+
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 async function lerGrupos(boardId: string): Promise<{ id: string; titulo: string }[]> {
@@ -160,6 +213,62 @@ async function lerGrupos(boardId: string): Promise<{ id: string; titulo: string 
     { ids: [boardId] },
   );
   return ordenarPorPosicao(r.boards[0]?.groups ?? []).map((g) => ({ id: g.id, titulo: g.title.trim() }));
+}
+
+/**
+ * por_area, na ordem do plano: Área → rótulo das regras → ocorrências → finalização.
+ * A Área vem antes de mover: um item finalizado sem Área perderia o gestor na edição.
+ */
+async function aplicarPlanoArea(q: QuadroLido, plano: PlanoQuadro, rel: RelatorioAplicacao, cfg: JornalConfig): Promise<RelatorioAplicacao> {
+  const t = cfg.tipos_de_quadro[q.tipo];
+  const porId = new Map(q.itens.map((i) => [i.id, i]));
+  const semArea = new Set<string>();
+  const atualizar = (itemId: string, valores: Record<string, unknown>) =>
+    mondayMutation(M_ATUALIZAR_COLUNAS, { board_id: q.id, item_id: itemId, valores: JSON.stringify(valores) });
+
+  for (const a of plano.acoesArea) {
+    if (a.tipo === "area_atualizada") {
+      try {
+        await atualizar(a.itemId, { [q.colunas["Área"]!.id]: valorMonday(q.colunas["Área"]!, { labels: [a.area] }) });
+        rel.areasAtualizadas.push({ nome: a.itemNome, id: a.itemId, area: a.area });
+      } catch (e) {
+        semArea.add(a.itemId);
+        rel.falhas.push({ acao: "area_atualizada", alvo: a.itemNome, erro: msg(e) });
+      }
+    } else if (a.tipo === "regra_rotulada") {
+      try {
+        await atualizar(a.itemId, { [q.colunas[t.status]!.id]: valorMonday(q.colunas[t.status]!, { label: a.status }) });
+        rel.regrasRotuladas.push({ nome: a.itemNome, id: a.itemId, status: a.status });
+      } catch (e) {
+        rel.falhas.push({ acao: "regra_rotulada", alvo: a.itemNome, erro: msg(e) });
+      }
+    } else if (a.tipo === "seria_criada") {
+      const regra = porId.get(a.regraId);
+      if (!regra) {
+        rel.falhas.push({ acao: "create_item", alvo: a.ocorrencia.chave, erro: "regra não encontrada" });
+        continue;
+      }
+      try {
+        const valores = montarColumnValuesArea(regra, a.ocorrencia, a.area, q.tipo, q.colunas, cfg);
+        const r = await mondayMutation<{ create_item: { id: string } }>(M_CRIAR_ITEM, { board_id: q.id, group_id: a.grupo.id, nome: a.itemNome, valores: JSON.stringify(valores) });
+        rel.itensCriados.push({ nome: a.itemNome, data: a.ocorrencia.dataOriginal, chave: a.ocorrencia.chave, id: r.create_item.id, grupo: a.grupo.titulo });
+      } catch (e) {
+        rel.falhas.push({ acao: "create_item", alvo: `${a.itemNome} ${a.ocorrencia.chave}`, erro: msg(e) });
+      }
+    } else {
+      if (semArea.has(a.itemId)) {
+        rel.falhas.push({ acao: "seria_finalizado", alvo: a.itemNome, erro: "pulado: a Área não foi gravada" });
+        continue;
+      }
+      try {
+        await mondayMutation(M_MOVER_ITEM, { item_id: a.itemId, group_id: a.grupo.id });
+        rel.itensMovidos.push({ nome: a.itemNome, id: a.itemId, grupo: a.grupo.titulo });
+      } catch (e) {
+        rel.falhas.push({ acao: "move_item_to_group", alvo: a.itemNome, erro: msg(e) });
+      }
+    }
+  }
+  return rel;
 }
 
 /** Aplica o plano sequencialmente. Falhas são registradas; ações dependentes são puladas. */
@@ -171,8 +280,12 @@ export async function aplicarPlano(q: QuadroLido, plano: PlanoQuadro, cfg: Jorna
     gruposReordenados: [],
     itensCriados: [],
     itensMovidos: [],
+    areasAtualizadas: [],
+    regrasRotuladas: [],
     falhas: [],
   };
+  if (q.layout === "por_area") return aplicarPlanoArea(q, plano, rel, cfg);
+
   const grupos = [...q.grupos];
   const idDoGrupo = (titulo: string) => grupos.find((g) => g.titulo === titulo)?.id;
   const falhou = new Set<string>();

@@ -11,9 +11,9 @@ describe("montarColumnValues — pagamentos", () => {
     Favorecido: { id: "fav", type: "text" },
     "Valor (R$)": { id: "val", type: "numbers" },
     Vencimento: { id: "venc", type: "date" },
-    Recorrência: { id: "rec", type: "dropdown" },
-    Status: { id: "st", type: "status" },
-    Coordenação: { id: "coord", type: "dropdown" },
+    Recorrência: { id: "rec", type: "dropdown", rotulos: [{ id: 1, nome: "Não recorrente" }, { id: 4, nome: "Mensal" }] },
+    Status: { id: "st", type: "status", rotulos: [{ id: 0, nome: "Previsto" }, { id: 1, nome: "Pago" }] },
+    Coordenação: { id: "coord", type: "dropdown", rotulos: [{ id: 3, nome: "Controladoria" }] },
     Observação: { id: "obs", type: "long_text" },
     Chave: { id: "ch", type: "text" },
   };
@@ -35,9 +35,9 @@ describe("montarColumnValues — pagamentos", () => {
     expect(montarColumnValues(regra, oc, "pagamentos", colunas)).toEqual({
       fav: "Imobiliária X",
       val: "12500.5",
-      rec: { labels: ["Mensal"] },
+      rec: { ids: [4] },
       venc: { date: "2026-10-09" },
-      st: { label: "Previsto" },
+      st: { index: 0 },
       ch: "13210563084:2026-10-10",
       obs: { text: "Data original 10/10 (sábado), ajustada para dia útil" },
     });
@@ -59,12 +59,11 @@ describe("montarColumnValues — pagamentos", () => {
 
 describe("montarColumnValues — atividades", () => {
   const colunas: Record<string, ColunaMapeada> = {
-    Tipo: { id: "tipo", type: "status" },
+    Tipo: { id: "tipo", type: "status", rotulos: [{ id: 5, nome: "Reunião" }] },
     Prazo: { id: "prazo", type: "date" },
-    Status: { id: "st", type: "status" },
-    Recorrência: { id: "rec", type: "dropdown" },
-    Responsável: { id: "resp", type: "text" },
-    "Observação / Bloqueio": { id: "obs", type: "text" },
+    Status: { id: "st", type: "status", rotulos: [{ id: 17, nome: "Não iniciado" }, { id: 2, nome: "Travado" }] },
+    Recorrência: { id: "rec", type: "dropdown", rotulos: [{ id: 3, nome: "Semanal" }] },
+    Observação: { id: "obs", type: "text" },
     Chave: { id: "ch", type: "text" },
   };
   const regra = {
@@ -73,8 +72,7 @@ describe("montarColumnValues — atividades", () => {
       Prazo: val({ date: "2026-10-07", text: "2026-10-07" }),
       Status: val({ label: "Travado", text: "Travado" }),
       Recorrência: val({ text: "Semanal", labels: ["Semanal"] }),
-      Responsável: val({ text: "Ana" }),
-      "Observação / Bloqueio": val({ text: "motivo antigo" }),
+      Observação: val({ text: "motivo antigo" }),
       Chave: val({}),
     },
   };
@@ -82,11 +80,10 @@ describe("montarColumnValues — atividades", () => {
   it("sem ajuste (dia útil): status inicial, chave, sem observação", () => {
     const oc = montarOcorrencia("99", "2026-10-14", "manter_e_avisar");
     expect(montarColumnValues(regra, oc, "atividades", colunas)).toEqual({
-      tipo: { label: "Reunião" },
-      rec: { labels: ["Semanal"] },
-      resp: "Ana",
+      tipo: { index: 5 },
+      rec: { ids: [3] },
       prazo: { date: "2026-10-14" },
-      st: { label: "Não iniciado" },
+      st: { index: 17 },
       ch: "99:2026-10-14",
     });
   });
@@ -98,7 +95,7 @@ describe("montarColumnValues — atividades", () => {
     expect(cv.obs).toBeUndefined();
   });
 
-  it("se a data efetiva diferir, preenche Observação / Bloqueio", () => {
+  it("se a data efetiva diferir, preenche Observação", () => {
     const oc = { chave: "99:2026-10-11", dataOriginal: "2026-10-11", dataEfetiva: "2026-10-09", grupoMes: "Outubro 2026" };
     expect(montarColumnValues(regra, oc, "atividades", colunas).obs).toBe("Data original 11/10 (domingo), ajustada para dia útil");
   });

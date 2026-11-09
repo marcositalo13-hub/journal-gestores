@@ -24,12 +24,11 @@ export function LinhaItem({ item, children }: { item: ItemEdicao; children: Reac
 }
 
 /**
- * Linha de apoio, sempre começando por quem responde (o gestor): "{gestor} · {extras} · exec. {executor} · {valor}".
+ * Linha de apoio, sempre começando por quem responde (o gestor): "{gestor} · {extras} · {valor}".
  * Pagamentos: "{gestor} · {valor}". O valor respeita "ocultar valores".
  */
 export function MetaItem({ item, extras = [] }: { item: ItemEdicao; extras?: ReactNode[] }) {
   const partes: ReactNode[] = [item.dono, ...extras];
-  if (item.responsavel) partes.push(`exec. ${item.responsavel}`);
   if (typeof item.valor === "number") partes.push(<Valor valor={item.valor} />);
   return (
     <>

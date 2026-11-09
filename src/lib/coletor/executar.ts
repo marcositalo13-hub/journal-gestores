@@ -10,6 +10,12 @@ export interface ContagemPlano {
   existe: number;
   seria_criada: number;
   seria_movido: number;
+  /** por_area */
+  area_atualizada: number;
+  /** por_area */
+  regra_rotulada: number;
+  /** por_area */
+  seria_finalizado: number;
 }
 
 export interface RelatorioQuadro {
@@ -23,6 +29,8 @@ export interface RelatorioQuadro {
   gruposReordenados: RelatorioAplicacao["gruposReordenados"];
   itensCriados: RelatorioAplicacao["itensCriados"];
   itensMovidos: RelatorioAplicacao["itensMovidos"];
+  areasAtualizadas: RelatorioAplicacao["areasAtualizadas"];
+  regrasRotuladas: RelatorioAplicacao["regrasRotuladas"];
   falhas: RelatorioAplicacao["falhas"];
 }
 
@@ -41,15 +49,22 @@ export interface RelatorioColeta {
   };
 }
 
-const contar = (p: PlanoQuadro): ContagemPlano => ({
-  existe: p.acoes.filter((a) => a.tipo === "existe").length,
-  seria_criada: p.acoes.filter((a) => a.tipo === "seria_criada").length,
-  seria_movido: p.acoes.filter((a) => a.tipo === "seria_movido").length,
-});
+const contar = (p: PlanoQuadro): ContagemPlano => {
+  const area = (t: string) => p.acoesArea.filter((a) => a.tipo === t).length;
+  return {
+    existe: p.acoes.filter((a) => a.tipo === "existe").length + p.ocorrenciasExistentes,
+    seria_criada: p.acoes.filter((a) => a.tipo === "seria_criada").length + area("seria_criada"),
+    seria_movido: p.acoes.filter((a) => a.tipo === "seria_movido").length,
+    area_atualizada: area("area_atualizada"),
+    regra_rotulada: area("regra_rotulada"),
+    seria_finalizado: area("seria_finalizado"),
+  };
+};
 
-async function lerEPlanejar(janela: Janela) {
-  const quadros = await lerQuadros();
-  return { quadros, planos: quadros.map((q) => planejarQuadro(q, janela)) };
+async function lerEPlanejar(janela: Janela, ref: string) {
+  const cfg = getConfig();
+  const quadros = await lerQuadros(cfg);
+  return { quadros, planos: quadros.map((q) => planejarQuadro(q, janela, cfg, ref)) };
 }
 
 export async function executarColeta({ aplicar }: { aplicar: boolean }): Promise<RelatorioColeta> {
@@ -59,13 +74,13 @@ export async function executarColeta({ aplicar }: { aplicar: boolean }): Promise
   const janela = janelaPadrao(ref);
   const avisoCalendario = coberturaCalendario(ref);
 
-  const antes = await lerEPlanejar(janela);
+  const antes = await lerEPlanejar(janela, ref);
   const relatorios: RelatorioAplicacao[] = [];
   let depois: Awaited<ReturnType<typeof lerEPlanejar>> | undefined;
 
   if (aplicar) {
     for (const [i, q] of antes.quadros.entries()) relatorios.push(await aplicarPlano(q, antes.planos[i]));
-    depois = await lerEPlanejar(janela);
+    depois = await lerEPlanejar(janela, ref);
   }
 
   const quadros: RelatorioQuadro[] = antes.quadros.map((q, i) => {
@@ -80,6 +95,8 @@ export async function executarColeta({ aplicar }: { aplicar: boolean }): Promise
       gruposReordenados: r?.gruposReordenados ?? [],
       itensCriados: r?.itensCriados ?? [],
       itensMovidos: r?.itensMovidos ?? [],
+      areasAtualizadas: r?.areasAtualizadas ?? [],
+      regrasRotuladas: r?.regrasRotuladas ?? [],
       falhas: r?.falhas ?? [],
     };
   });
