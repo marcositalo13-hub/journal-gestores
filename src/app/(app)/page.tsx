@@ -64,7 +64,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   const simulada = dataDeTeste(params.data, process.env.NODE_ENV);
   // ?item=ID: aberto por uma notificação. Pagamentos abrem na aba deles.
   const itemAberto = await itemDaUrl(params.item);
-  if (itemAberto?.tipoQuadro === "pagamentos") redirect(`/pagamentos?item=${itemAberto.id}`);
+  if (itemAberto?.tipoQuadro === "pagamentos" && getConfig().abas.pagamentos) redirect(`/pagamentos?item=${itemAberto.id}`);
 
   const resultado = await (simulada ? obterEdicaoEm(simulada) : obterEdicao()).then(
     (edicao) => ({ edicao }),

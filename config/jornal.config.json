@@ -32,6 +32,8 @@
   },
   "empate_dia_util": "anterior",
   "considerar_facultativos_como_nao_util": true,
+  "abas": {"pagamentos": false},
+  "multiseguros": {"importador_email": "marcos.porto@brbseguros.com.br"},
   "urgencia": {"atencao_dias_uteis": 3},
   "notificacoes": {"janela_inicio": "07:00", "janela_fim": "20:00", "agrupar_minutos": 15, "pagamento_relevante": 100000, "pagamento_antecedencia_dias": 7, "novo_horas": 24},
   "manchete": {"pagamento_relevante_a_partir_de": 100000, "pagamento_antecedencia_dias": 7, "contrato_antecedencia_dias": 10},

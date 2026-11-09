@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { leitorDaSessao } from "@/lib/auth";
 import { AbrirItem } from "@/components/pauta/abrir-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
@@ -92,6 +94,12 @@ const Linhas = ({ itens, hoje }: { itens: LinhaPag[]; hoje: DataISO }) => (
 
 export default async function PaginaPagamentos({ searchParams }: PageProps<"/pagamentos">) {
   const sp = await searchParams;
+  // Aba oculta: 404 para todos, menos o importador da Multiseguros (abre por URL, com aviso)
+  const oculta = !getConfig().abas.pagamentos;
+  if (oculta) {
+    const leitor = await leitorDaSessao();
+    if (leitor?.email.toLowerCase() !== getConfig().multiseguros.importador_email.toLowerCase()) notFound();
+  }
   const hojeEfetivo = dataDeTeste(sp.data, process.env.NODE_ENV) ?? hoje();
   // ?fixture=pagamentos: dados de exemplo, SÓ fora de produção (o quadro real pode estar vazio).
   const exemplo = fixturePagamentosAtiva(sp.fixture, process.env.NODE_ENV);
@@ -113,6 +121,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
 
   return (
     <>
+      {oculta && <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">Em construção — oculta para o diretor</p>}
       {itemAberto && <AbrirItem item={itemAberto} />}
       {(exemplo || sp.data) && (
         <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">

@@ -28,6 +28,11 @@ export interface Notificacoes {
   novo_horas: number;
 }
 
+export interface Abas {
+  /** false: a aba Pagamentos some para todos, e /pagamentos só abre para multiseguros.importador_email */
+  pagamentos: boolean;
+}
+
 export interface Urgencia {
   /** itens com prazo nos próximos N dias úteis ficam em "amarelo" (atenção) */
   atencao_dias_uteis: number;
@@ -95,6 +100,8 @@ export interface JornalConfig {
   considerar_facultativos_como_nao_util: boolean;
   manchete: Manchete;
   urgencia: Urgencia;
+  abas: Abas;
+  multiseguros: { importador_email: string };
   notificacoes: Notificacoes;
   /** recorte das fotos por slug ({"joao-silva": "center"}); o padrão é "north" */
   fotos_recorte?: Record<string, RecorteFoto>;
@@ -271,6 +278,12 @@ export function validarConfig(c: unknown): JornalConfig {
   else if (typeof uc.atencao_dias_uteis !== "number" || !Number.isInteger(uc.atencao_dias_uteis) || uc.atencao_dias_uteis < 1) {
     erros.push(`urgencia.atencao_dias_uteis deve ser número inteiro >= 1`);
   }
+  const ab = (o.abas ?? {}) as Record<string, unknown>;
+  if (typeof o.abas !== "object" || o.abas === null) erros.push(`"abas" deve ser objeto`);
+  else if (typeof ab.pagamentos !== "boolean") erros.push(`abas.pagamentos deve ser true ou false`);
+  const ms = (o.multiseguros ?? {}) as Record<string, unknown>;
+  if (typeof o.multiseguros !== "object" || o.multiseguros === null) erros.push(`"multiseguros" deve ser objeto`);
+  else if (typeof ms.importador_email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ms.importador_email)) erros.push(`multiseguros.importador_email deve ser um e-mail`);
   const nt = (o.notificacoes ?? {}) as Record<string, unknown>;
   if (typeof o.notificacoes !== "object" || o.notificacoes === null) erros.push(`"notificacoes" deve ser objeto`);
   else {

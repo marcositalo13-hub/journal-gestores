@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const ABAS = [
+const TODAS = [
   { href: "/", rotulo: "Hoje" },
   { href: "/pagamentos", rotulo: "Pagamentos" },
   { href: "/gestores", rotulo: "Gestores" },
@@ -16,7 +16,8 @@ function ativa(pathname: string, href: string) {
 
 // Linguagem de jornal: rótulos em Newsreader, sem ícones nem cor de destaque.
 // A aba ativa ganha tinta e uma régua de 2px acima do rótulo, que desliza (só transform).
-export function BarraAbas() {
+export function BarraAbas({ comPagamentos }: { comPagamentos: boolean }) {
+  const ABAS = TODAS.filter((a) => comPagamentos || a.href !== "/pagamentos");
   const pathname = usePathname();
   const indice = Math.max(0, ABAS.findIndex((a) => ativa(pathname, a.href)));
 

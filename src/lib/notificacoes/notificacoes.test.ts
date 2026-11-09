@@ -10,7 +10,8 @@ import { enviarPendentes, processarEvento, resumoDaManha, type DepsNotificacoes,
 import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFila } from "./regras";
 import { tokenConfere, tratarWebhook } from "./webhook";
 
-const cfg = getConfig();
+const cfgOculta = getConfig(); // abas.pagamentos = false (estado atual)
+const cfg = validarConfig({ ...raw, abas: { pagamentos: true } }); // regras de pagamento testadas com a aba visível
 const RAIZ = resolve(__dirname, "../../..");
 // terça, 10/11/2026, 10:00 em São Paulo
 const AGORA = new Date("2026-11-10T13:00:00Z");
@@ -378,6 +379,19 @@ describe("webhook: token, handshake e filtro", () => {
     expect(tratarWebhook(corpo({ event: { type: "delete_pulse", boardId: 18438464813, pulseId: 1 } }), S, S, cfg).evento).toBeUndefined();
     expect(tratarWebhook(corpo({ event: { type: "create_pulse", boardId: 18438464813, pulseId: "1; drop" } }), S, S, cfg).evento).toBeUndefined();
     expect(tratarWebhook("não é json", S, S, cfg).status).toBe(400);
+  });
+});
+
+describe("aba Pagamentos oculta", () => {
+  it("nenhuma notificação de pagamento (R2/R3) e portanto nenhum link para /pagamentos", () => {
+    expect(cfgOculta.abas.pagamentos).toBe(false);
+    expect(avaliarRegras(coluna("Status"), pag({ categoria: "travado" }), AGORA, cfgOculta)).toEqual([]);
+    expect(avaliarRegras(criado, pag(), AGORA, cfgOculta)).toEqual([]);
+    expect(avaliarRegras(criado, ativ({ tipo: "Contrato" }), AGORA, cfgOculta)).toHaveLength(1); // atividades seguem
+  });
+  it("a config valida abas e multiseguros", () => {
+    expect(() => validarConfig({ ...raw, abas: { pagamentos: "não" } })).toThrow(/abas\.pagamentos/);
+    expect(() => validarConfig({ ...raw, multiseguros: { importador_email: "x" } })).toThrow(/importador_email/);
   });
 });
 

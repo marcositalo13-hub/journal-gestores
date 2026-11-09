@@ -84,6 +84,7 @@ function regrasDoEvento(e: EventoItem, i: ItemParaRegras, cfg: JornalConfig): Se
  */
 export function avaliarRegras(evento: EventoItem, i: ItemParaRegras, agora: Date, cfg: JornalConfig): NotificacaoFila[] {
   if (evento.tipo === "criado" && i.geradoPeloColetor) return [];
+  if (i.tipoQuadro === "pagamentos" && !cfg.abas.pagamentos) return []; // aba oculta: nunca notificar nem linkar para /pagamentos
   const possiveis = regrasDoEvento(evento, i, cfg);
   const hoje = hojeSP(agora, cfg);
   const nome = limparValores(i.nome);
