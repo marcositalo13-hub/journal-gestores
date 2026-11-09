@@ -13,8 +13,9 @@ import { dataDeTeste } from "@/lib/edicao/data-dev";
 import { obterItens } from "@/lib/edicao/obter";
 import { urlsDasFotos } from "@/lib/fotos-servidor";
 import { dataCurta, etapasTexto } from "@/lib/formato";
-import { mensagemCaderno, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
-import { BotaoWhatsapp } from "@/components/pauta/botao-whatsapp";
+import { mensagemCaderno, primeiroNome } from "@/lib/whatsapp";
+import { ContatoWhatsapp } from "@/components/pauta/contato-whatsapp";
+import { obterContatos } from "@/lib/contatos-servidor";
 
 export async function generateMetadata({ params }: PageProps<"/gestores/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -42,7 +43,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
   if (!c) notFound();
 
   const foto = (await urlsDasFotos([c.gestor.nome]))[c.gestor.nome];
-  const whatsapp = cfg.gestores.find((g) => g.nome === c.gestor.nome)?.whatsapp;
+  const whatsapp = (await obterContatos())[slug];
+  const ehGestorDoConfig = cfg.gestores.some((g) => g.nome === c.gestor.nome);
   const vazio = [c.atrasados, c.travados, c.hoje, c.proximos14, c.semPrazo].every((x) => x.length === 0);
   const pct = c.mes.total > 0 ? (c.mes.concluidos / c.mes.total) * 100 : 0;
 
@@ -67,11 +69,13 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
             <p className="mt-0.5 text-[0.9375rem] text-tinta-2">{c.gestor.reportaA ? `Reporta a ${c.gestor.reportaA}` : "Fora da estrutura"}</p>
           </div>
         </div>
-        {whatsapp && (
-          <BotaoWhatsapp
+        {ehGestorDoConfig && (
+          <ContatoWhatsapp
             className="mt-5"
+            slug={slug}
             primeiroNome={primeiroNome(c.gestor.nome)}
-            href={urlWhatsapp(whatsapp, mensagemCaderno(primeiroNome(c.gestor.nome)))}
+            numero={whatsapp}
+            mensagem={mensagemCaderno(primeiroNome(c.gestor.nome))}
           />
         )}
         {c.temEquipe && <AlternarEquipe primeiroNome={c.gestor.nome.split(" ")[0]} comEquipe={c.incluiEquipe} />}

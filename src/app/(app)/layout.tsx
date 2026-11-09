@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { hoje, horaMinuto, saudacao } from "@/lib/calendario";
 import { getConfig, leitorPorEmail } from "@/lib/config";
+import { obterContatos } from "@/lib/contatos-servidor";
+import { slugDe } from "@/lib/edicao/caderno";
 import { dataCurta } from "@/lib/formato";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { AberturaDiaria } from "@/components/pauta/abertura-diaria";
@@ -9,6 +11,7 @@ import { AlternarValores } from "@/components/pauta/alternar-valores";
 import { CabecalhoApp } from "@/components/pauta/cabecalho-app";
 import { Atualizado } from "@/components/pauta/atualizado";
 import { ProvedorDetalhe } from "@/components/pauta/detalhe";
+import { Toaster } from "sonner";
 import { sair } from "../entrar/actions";
 import { BarraAbas } from "./barra-abas";
 
@@ -28,7 +31,8 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const agora = new Date();
   const hora = horaMinuto(agora);
   const dia = hoje(agora);
-  const diretorio = Object.fromEntries(getConfig().gestores.map((g) => [g.nome, { area: g.area, whatsapp: g.whatsapp }]));
+  const contatos = await obterContatos(); // o banco vence o config; só páginas atrás do login recebem os números
+  const diretorio = Object.fromEntries(getConfig().gestores.map((g) => [g.nome, { area: g.area, slug: slugDe(g.nome), whatsapp: contatos[slugDe(g.nome)] }]));
 
   return (
     <ProvedorDetalhe gestores={diretorio}>
@@ -61,6 +65,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
         <BarraAbas />
         <AberturaDiaria />
+        <Toaster position="top-center" />
       </div>
     </ProvedorDetalhe>
   );

@@ -4,10 +4,9 @@ import { X } from "lucide-react";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import type { ItemEdicao } from "@/lib/edicao/itens";
-import { cn } from "@/lib/utils";
 import { dataCurta, etapasTexto } from "@/lib/formato";
-import { mensagemItem, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
-import { BotaoWhatsapp } from "./botao-whatsapp";
+import { mensagemItem, primeiroNome } from "@/lib/whatsapp";
+import { ContatoWhatsapp } from "./contato-whatsapp";
 import { PillStatus } from "./pill-status";
 import { Valor } from "./valor";
 
@@ -24,7 +23,7 @@ export function useDetalhe(): ContextoDetalhe {
 
 /** Um único painel de detalhes para o app inteiro (Hoje e Gestores). */
 /** Dados mínimos dos gestores para a folha (vêm do servidor; o config inteiro não vai para o cliente). */
-export type DiretorioGestores = Record<string, { area: string | null; whatsapp?: string }>;
+export type DiretorioGestores = Record<string, { area: string | null; whatsapp?: string; slug: string }>;
 
 export function ProvedorDetalhe({ children, gestores }: { children: ReactNode; gestores: DiretorioGestores }) {
   const [item, setItem] = useState<ItemEdicao | null>(null);
@@ -77,7 +76,19 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
               <DrawerDescription className="sr-only">Detalhes do item selecionado.</DrawerDescription>
             </DrawerHeader>
 
-            <dl className={cn("overflow-y-auto overscroll-contain px-5", !gestor?.whatsapp && "pb-[calc(env(safe-area-inset-bottom)+1.5rem)]")}>
+            {gestor && (
+              <div className="px-5 pb-3">
+                <ContatoWhatsapp
+                  key={gestor.slug}
+                  slug={gestor.slug}
+                  primeiroNome={primeiroNome(item.dono)}
+                  numero={gestor.whatsapp}
+                  mensagem={mensagemItem(item, primeiroNome(item.dono))}
+                />
+              </div>
+            )}
+
+            <dl className="overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
               <Campo rotulo={"dataHerdada" in item && item.dataHerdada ? "Prazo da última etapa" : "Prazo"}>
                 {item.data ? dataCurta(item.data) : <span className="text-alerta">Sem prazo definido</span>}
               </Campo>
@@ -114,15 +125,6 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                 </Campo>
               )}
             </dl>
-
-            {gestor?.whatsapp && (
-              <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-1">
-                <BotaoWhatsapp
-                  primeiroNome={primeiroNome(item.dono)}
-                  href={urlWhatsapp(gestor.whatsapp, mensagemItem(item, primeiroNome(item.dono)))}
-                />
-              </div>
-            )}
           </>
         )}
       </DrawerContent>
