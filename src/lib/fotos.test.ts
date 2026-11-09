@@ -63,17 +63,18 @@ describe("nomes", () => {
 });
 
 describe("seloGestor", () => {
-  it("pendências = atrasados + travados; rótulo acessível no singular e no plural", () => {
-    expect(seloGestor({ atrasados: 1, travados: 1, semPrazo: 0 })).toEqual({ tipo: "pendencias", n: 2, rotulo: "2 pendências" });
-    expect(seloGestor({ atrasados: 0, travados: 1, semPrazo: 0 })).toEqual({ tipo: "pendencias", n: 1, rotulo: "1 pendência" });
+  it("pendências = atrasados + travados; rótulo acessível no singular e no plural; cor do pior item", () => {
+    expect(seloGestor({ atrasados: 1, travados: 1, semPrazo: 0 }, "preto")).toEqual({ tipo: "pendencias", n: 2, nivel: "preto", rotulo: "2 pendências" });
+    expect(seloGestor({ atrasados: 0, travados: 1, semPrazo: 0 }, "vermelho")).toEqual({ tipo: "pendencias", n: 1, nivel: "vermelho", rotulo: "1 pendência" });
   });
-  it("pendências têm precedência sobre 'sem prazo'", () => {
-    expect(seloGestor({ atrasados: 3, travados: 0, semPrazo: 5 })?.tipo).toBe("pendencias");
+  it("sem pendências: ponto na cor do pior item, com rótulo", () => {
+    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 0 }, "vermelho")).toEqual({ tipo: "atencao", nivel: "vermelho", rotulo: "Itens com prazo hoje" });
+    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 1 }, "amarelo")).toEqual({ tipo: "atencao", nivel: "amarelo", rotulo: "1 item sem prazo" });
+    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 3 }, "amarelo")?.rotulo).toBe("3 itens sem prazo");
+    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 0 }, "amarelo")?.rotulo).toBe("Prazos nos próximos dias");
   });
-  it("só sem prazo → ponto de aviso; nada → sem selo", () => {
-    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 1 })).toEqual({ tipo: "sem-prazo", n: 1, rotulo: "1 item sem prazo" });
-    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 3 })?.rotulo).toBe("3 itens sem prazo");
-    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 0 })).toBeNull();
+  it("tudo em dia (nenhum item pior que verde) → sem selo", () => {
+    expect(seloGestor({ atrasados: 0, travados: 0, semPrazo: 0 }, null)).toBeNull();
   });
 });
 

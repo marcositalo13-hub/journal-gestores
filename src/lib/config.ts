@@ -11,6 +11,11 @@ export interface Leitor {
   nome: string;
 }
 
+export interface Urgencia {
+  /** itens com prazo nos próximos N dias úteis ficam em "amarelo" (atenção) */
+  atencao_dias_uteis: number;
+}
+
 export interface Manchete {
   /** valor (R$) a partir do qual um pagamento pode virar manchete */
   pagamento_relevante_a_partir_de: number;
@@ -72,6 +77,7 @@ export interface JornalConfig {
   empate_dia_util: "anterior" | "posterior";
   considerar_facultativos_como_nao_util: boolean;
   manchete: Manchete;
+  urgencia: Urgencia;
   feriados: string[];
   facultativos: string[];
 }
@@ -239,6 +245,11 @@ export function validarConfig(c: unknown): JornalConfig {
     num("pagamento_relevante_a_partir_de", false);
     num("pagamento_antecedencia_dias", true);
     num("contrato_antecedencia_dias", true);
+  }
+  const uc = (o.urgencia ?? {}) as Record<string, unknown>;
+  if (typeof o.urgencia !== "object" || o.urgencia === null) erros.push(`"urgencia" deve ser objeto`);
+  else if (typeof uc.atencao_dias_uteis !== "number" || !Number.isInteger(uc.atencao_dias_uteis) || uc.atencao_dias_uteis < 1) {
+    erros.push(`urgencia.atencao_dias_uteis deve ser número inteiro >= 1`);
   }
   for (const k of ["feriados", "facultativos"]) {
     arr(k).forEach((d, i) => {

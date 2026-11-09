@@ -5,15 +5,14 @@ import { Avatar } from "@/components/pauta/avatar";
 import { AlternarEquipe } from "@/components/pauta/alternar-equipe";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
-import { PillStatus } from "@/components/pauta/pill-status";
-import { LinhaItem, MetaItem, Secao } from "@/components/pauta/secao";
+import { LinhaItem, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
 import { dataPorExtenso, hoje } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { montarCaderno, slugDe } from "@/lib/edicao/caderno";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import { obterItens } from "@/lib/edicao/obter";
 import { urlsDasFotos } from "@/lib/fotos-servidor";
-import { dataCurta, etapasTexto, haDias } from "@/lib/formato";
+import { dataCurta, etapasTexto } from "@/lib/formato";
 import { mensagemCaderno, primeiroNome, urlWhatsapp } from "@/lib/whatsapp";
 import { BotaoWhatsapp } from "@/components/pauta/botao-whatsapp";
 
@@ -38,7 +37,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
   const cfg = getConfig();
   const nomes = [...cfg.gestores.map((g) => g.nome), ...new Set([...dados.itens, ...dados.semPrazo].map((i) => i.dono))];
   const nome = nomes.find((n) => slugDe(n) === slug);
-  const c = nome ? montarCaderno(dados.itens, dados.semPrazo, simulada ?? hoje(), cfg, nome, comEquipe) : null;
+  const dia = simulada ?? hoje();
+  const c = nome ? montarCaderno(dados.itens, dados.semPrazo, dia, cfg, nome, comEquipe) : null;
   if (!c) notFound();
 
   const foto = (await urlsDasFotos([c.gestor.nome]))[c.gestor.nome];
@@ -100,13 +100,13 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
       {c.atrasados.length > 0 && (
         <Secao id="s-atrasados" titulo="Atrasados">
           <ul>
-            {c.atrasados.map(({ item, diasAtraso }) => (
-              <LinhaItem key={item.id} item={item}>
+            {c.atrasados.map(({ item }) => (
+              <LinhaItem key={item.id} item={item} hoje={dia}>
                 <ConteudoLinha
                   item={item}
                   mostrarTipo={false}
                   meta={<MetaItem item={item} extras={[`prazo ${dataCurta(item.data)}`]} />}
-                  direita={<span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-alerta">{haDias(diasAtraso)}</span>}
+                  direita={<RotuloItem item={item} hoje={dia} />}
                 />
               </LinhaItem>
             ))}
@@ -118,7 +118,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
         <Secao id="s-travados" titulo="Travados">
           <ul>
             {c.travados.map(({ item, motivo }) => (
-              <LinhaItem key={item.id} item={item}>
+              <LinhaItem key={item.id} item={item} hoje={dia}>
                 <ConteudoLinha
                   item={item}
                   mostrarTipo={false}
@@ -129,7 +129,7 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
                       <MetaItem item={item} extras={item.etapas ? [etapasTexto(item.etapas)] : []} />
                     </>
                   }
-                  direita={<PillStatus categoria="travado" status="Travado" />}
+                  direita={<RotuloItem item={item} hoje={dia} />}
                 />
               </LinhaItem>
             ))}
@@ -141,8 +141,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
         <Secao id="s-hoje" titulo="Hoje">
           <ul>
             {c.hoje.map((item) => (
-              <LinhaItem key={item.id} item={item}>
-                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+              <LinhaItem key={item.id} item={item} hoje={dia}>
+                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<RotuloItem item={item} hoje={dia} />} />
               </LinhaItem>
             ))}
           </ul>
@@ -159,8 +159,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
               </h3>
               <ul>
                 {d.itens.map((item) => (
-                  <LinhaItem key={item.id} item={item}>
-                    <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+                  <LinhaItem key={item.id} item={item} hoje={dia}>
+                    <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<RotuloItem item={item} hoje={dia} />} />
                   </LinhaItem>
                 ))}
               </ul>
@@ -173,8 +173,8 @@ export default async function PaginaCaderno({ params, searchParams }: PageProps<
         <Secao id="s-sem-prazo" titulo="Sem prazo">
           <ul>
             {c.semPrazo.map((item) => (
-              <LinhaItem key={item.id} item={item}>
-                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<PillStatus categoria={item.categoria} status={item.status} />} />
+              <LinhaItem key={item.id} item={item} hoje={dia}>
+                <ConteudoLinha item={item} meta={<MetaItem item={item} />} direita={<RotuloItem item={item} hoje={dia} />} />
               </LinhaItem>
             ))}
           </ul>

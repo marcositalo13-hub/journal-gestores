@@ -1,18 +1,13 @@
-import { areaCurta } from "@/lib/config";
-import type { MancheteEdicao, RegraManchete } from "@/lib/edicao/montar";
+import type { DataISO } from "@/lib/calendario";
+import { areaCurta, getConfig } from "@/lib/config";
+import type { MancheteEdicao } from "@/lib/edicao/montar";
+import { nivelUrgencia } from "@/lib/edicao/urgencia";
 import { dataCurta } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 import { BotaoItem } from "./botao-item";
+import { COR_TEXTO } from "./nivel";
 
-const KICKER: Record<RegraManchete, string> = {
-  contrato: "Contrato vencendo",
-  pendencia: "Atrasado",
-  travado: "Travado",
-};
-
-const semPontoFinal = (s: string) => s.replace(/\.$/, "");
-
-export function Manchete({ manchete }: { manchete: MancheteEdicao | null }) {
+export function Manchete({ manchete, hoje }: { manchete: MancheteEdicao | null; hoje: DataISO }) {
   if (!manchete) {
     return (
       <section aria-label="Manchete" className="pb-2">
@@ -20,15 +15,17 @@ export function Manchete({ manchete }: { manchete: MancheteEdicao | null }) {
       </section>
     );
   }
-  const { item, regra } = manchete;
-  const urgente = regra === "pendencia" || regra === "travado";
+  const { item, kicker } = manchete;
+  const nivel = nivelUrgencia(item, hoje, getConfig());
   return (
     <section aria-label="Manchete" className="pb-1">
       <BotaoItem item={item} className="block pt-1 pb-5">
-        <span className={cn("kicker", urgente ? "text-alerta" : "text-destaque")}>{KICKER[regra]}</span>
+        <span className={cn("kicker", nivel ? COR_TEXTO[nivel] : "text-tinta")}>{kicker}</span>
         <span className="titulo-jornal mt-2 block text-[1.875rem] leading-[1.1]">{item.nome}</span>
-        <span className="mt-3 block text-base leading-6 text-tinta-2">
-          {semPontoFinal(manchete.motivo)} · {item.dono}
+        {/* Observação: as 2 primeiras linhas (a folha de detalhes mostra o texto inteiro) */}
+        {item.observacao && <span className="mt-2.5 line-clamp-2 whitespace-pre-line text-base leading-6 text-tinta-2">{item.observacao}</span>}
+        <span className="mt-2 block text-[0.9375rem] leading-6 text-tinta-2">
+          {item.dono}
           {areaCurta(item.dono) && ` · ${areaCurta(item.dono)}`}
           {item.data && ` · ${dataCurta(item.data)}`}
         </span>

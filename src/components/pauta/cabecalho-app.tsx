@@ -3,47 +3,48 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+const Sep = () => <span className="shrink-0">&nbsp;·&nbsp;</span>;
+
 /**
- * Cabeçalho do app. Em "Hoje" (/): cabeçalho completo (nome grande, saudação, data por extenso).
- * Nas demais páginas: compacto: "A Pauta" pequeno com olho e Sair na mesma linha, e abaixo "data · atualizado".
- * Os pedaços vêm prontos do servidor (props); aqui só se escolhe qual mostrar.
+ * Cabeçalho compacto em todas as abas. Linha 1: "A Pauta" pequeno à esquerda; olho e Sair à direita.
+ * Linha 2: em Hoje, "Bom dia, {nome} · {data} · atualizado às HHhMM"; nas demais, o mesmo sem a saudação.
+ * Em tela estreita só a data é cortada (com reticências): o nome e o "atualizado" (que atualiza ao toque) nunca quebram.
+ * Os pedaços vêm prontos do servidor (props); aqui só se decide se a saudação aparece.
  */
 export function CabecalhoApp({
   acoes,
   saudacao,
-  dataExtenso,
   dataCompacta,
   atualizado,
 }: {
   acoes: ReactNode;
   saudacao: ReactNode;
-  dataExtenso: ReactNode;
   dataCompacta: ReactNode;
   atualizado: ReactNode;
 }) {
-  const completo = usePathname() === "/";
+  const emHoje = usePathname() === "/";
   return (
     <header className="topo-seguro regua-dupla">
       <div className="mx-auto w-full max-w-[640px] px-5 pb-5">
-        {completo ? (
-          <>
-            <div className="flex items-center justify-end gap-1">{acoes}</div>
-            <h1 className="titulo-jornal text-[2.1rem] sm:text-[2.55rem]">A Pauta</h1>
-            <p className="mt-3 text-base text-tinta">{saudacao}</p>
-            <p className="mt-1 text-base text-tinta-2">{dataExtenso}</p>
-            <p className="mt-1 text-[0.875rem] text-tinta-2">{atualizado}</p>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="titulo-jornal text-[1.5rem]">A Pauta</h1>
-              <div className="flex items-center gap-1">{acoes}</div>
-            </div>
-            <p className="-mt-1 whitespace-nowrap text-[0.875rem] text-tinta-2">
-              {dataCompacta} · {atualizado}
-            </p>
-          </>
-        )}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="titulo-jornal text-[1.5rem]">
+            <span data-marca-cabecalho className="marca-cabecalho inline-block">
+              A Pauta
+            </span>
+          </h1>
+          <div className="flex items-center gap-1">{acoes}</div>
+        </div>
+        <p className="-mt-1 flex min-w-0 whitespace-nowrap text-[0.8125rem] text-tinta-2">
+          {emHoje && (
+            <>
+              <span className="shrink-0">{saudacao}</span>
+              <Sep />
+            </>
+          )}
+          <span className="min-w-0 truncate">{dataCompacta}</span>
+          <Sep />
+          <span className="shrink-0">{atualizado}</span>
+        </p>
       </div>
     </header>
   );

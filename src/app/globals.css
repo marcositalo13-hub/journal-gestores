@@ -13,6 +13,13 @@
   --aviso: #a65f00; /* fim de semana / feriado */
   --ok: #2e7d32;
 
+  /* Níveis de urgência: a barra (4px) usa a cor cheia; o texto usa a variante escura quando precisa de contraste. */
+  --nivel-preto: #0d0e11;
+  --nivel-vermelho: var(--alerta);
+  --nivel-amarelo: #f0b400; /* âmbar visível em barras e pontos */
+  --nivel-amarelo-texto: #8a5a00; /* âmbar escuro: texto sobre branco (contraste ≥ 5:1) */
+  --nivel-verde: var(--ok);
+
   --fonte-sistema: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --altura-abas: 3.5rem;
@@ -31,6 +38,11 @@
   --color-alerta: var(--alerta);
   --color-aviso: var(--aviso);
   --color-ok: var(--ok);
+  --color-nivel-preto: var(--nivel-preto);
+  --color-nivel-vermelho: var(--nivel-vermelho);
+  --color-nivel-amarelo: var(--nivel-amarelo);
+  --color-nivel-amarelo-texto: var(--nivel-amarelo-texto);
+  --color-nivel-verde: var(--nivel-verde);
   --font-sans: var(--fonte-sistema);
   --font-jornal: var(--font-newsreader), Georgia, "Times New Roman", serif;
 }
@@ -269,5 +281,38 @@ html[data-ocultar] .valor-oculto {
   [data-vaul-overlay] {
     transition-duration: 1ms !important;
     animation-duration: 1ms !important;
+  }
+}
+
+/* ---------- Abertura diária ---------- */
+/* O atributo data-intro é posto no <html> por um script inline ANTES da primeira pintura, só na primeira
+   abertura do dia (São Paulo). Sem ele a camada nem aparece e a marca do cabeçalho fica normal. */
+.abertura {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  background: var(--papel);
+  touch-action: manipulation;
+}
+html[data-intro] .abertura {
+  display: flex;
+  /* rede de segurança: se o JS não rodar, a camada some sozinha depois de 3 s */
+  animation: abertura-seguranca 1ms linear 3s forwards;
+}
+html[data-intro] .marca-cabecalho {
+  opacity: 0;
+}
+.abertura-marca {
+  display: inline-block;
+  font-size: 3.25rem;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+@keyframes abertura-seguranca {
+  to {
+    visibility: hidden;
   }
 }

@@ -2,18 +2,18 @@ import { CalendarClock } from "lucide-react";
 import type { ReactNode } from "react";
 import { BotaoItem } from "@/components/pauta/botao-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
+import { LegendaNiveis } from "@/components/pauta/legenda-niveis";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { Manchete } from "@/components/pauta/manchete";
-import { PillStatus } from "@/components/pauta/pill-status";
-import { MetaItem } from "@/components/pauta/secao";
+import { LinhaItem, MetaItem, RotuloItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
-import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil } from "@/lib/calendario";
+import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
-import type { ItemEdicao } from "@/lib/edicao/itens";
 import type { DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
-import { contagem, dataCurta, dataTitulo, etapasTexto, haDias, semPrazoTexto } from "@/lib/formato";
+import { nivelUrgencia, textosLegenda } from "@/lib/edicao/urgencia";
+import { contagem, dataCurta, dataTitulo, etapasTexto, semPrazoTexto } from "@/lib/formato";
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -26,14 +26,8 @@ function Secao({ id, titulo, children }: { id: string; titulo: string; children:
   );
 }
 
-const Linha = ({ item, children }: { item: ItemEdicao; children: ReactNode }) => (
-  <li className="border-b border-borda last:border-b-0">
-    <BotaoItem item={item}>{children}</BotaoItem>
-  </li>
-);
-
 /** Lista de um dia futuro (mesmas linhas e mesma folha de detalhes da edição). */
-function ListaDoDia({ dia }: { dia: DiaSemana }) {
+function ListaDoDia({ dia, hoje }: { dia: DiaSemana; hoje: DataISO }) {
   return (
     <section aria-labelledby="s-dia">
       <h2 id="s-dia" className="titulo-jornal text-[1.625rem] leading-tight">
@@ -46,13 +40,13 @@ function ListaDoDia({ dia }: { dia: DiaSemana }) {
       {dia.itens.length > 0 && (
         <ul className="mt-3 border-t border-borda">
           {dia.itens.map((item) => (
-            <Linha key={item.id} item={item}>
+            <LinhaItem key={item.id} item={item} hoje={hoje}>
               <ConteudoLinha
                 item={item}
                 meta={<MetaItem item={item} />}
-                direita={<PillStatus categoria={item.categoria} status={item.status} />}
+                direita={<RotuloItem item={item} hoje={hoje} />}
               />
-            </Linha>
+            </LinhaItem>
           ))}
         </ul>
       )}
@@ -74,6 +68,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   );
   if (!resultado.edicao) return <ErroEdicao />;
   const edicao = resultado.edicao;
+  const hoje = edicao.data;
   const cfg = getConfig();
 
   // Navegador: "Hoje" + 6 dias seguintes. ?dia= fora dessa janela é ignorado (volta para hoje).
@@ -100,10 +95,10 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
       )}
 
       {outroDia ? (
-        <ListaDoDia dia={outroDia} />
+        <ListaDoDia dia={outroDia} hoje={edicao.data} />
       ) : (
         <>
-          <Manchete manchete={edicao.manchete} />
+          <Manchete manchete={edicao.manchete} hoje={edicao.data} />
 
           <Secao id="s-hoje" titulo="Hoje">
             {gruposHoje.length === 0 ? (
@@ -117,13 +112,13 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                   </h3>
                   <ul>
                     {g.itens.map((item) => (
-                      <Linha key={item.id} item={item}>
+                      <LinhaItem key={item.id} item={item} hoje={hoje}>
                         <ConteudoLinha
                           item={item}
                           meta={<MetaItem item={item} />}
-                          direita={<PillStatus categoria={item.categoria} status={item.status} />}
+                          direita={<RotuloItem item={item} hoje={hoje} />}
                         />
-                      </Linha>
+                      </LinhaItem>
                     ))}
                   </ul>
                 </div>
@@ -134,15 +129,15 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
           {edicao.pendencias.length > 0 && (
             <Secao id="s-pendencias" titulo="Pendências">
               <ul>
-                {edicao.pendencias.map(({ item, diasAtraso }) => (
-                  <Linha key={item.id} item={item}>
+                {edicao.pendencias.map(({ item }) => (
+                  <LinhaItem key={item.id} item={item} hoje={hoje}>
                     <ConteudoLinha
                       item={item}
                       mostrarTipo={false}
                       meta={<MetaItem item={item} extras={[`prazo ${dataCurta(item.data)}`]} />}
-                      direita={<span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-alerta">{haDias(diasAtraso)}</span>}
+                      direita={<RotuloItem item={item} hoje={hoje} />}
                     />
-                  </Linha>
+                  </LinhaItem>
                 ))}
               </ul>
             </Secao>
@@ -152,7 +147,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
             <Secao id="s-travados" titulo="Travados">
               <ul>
                 {edicao.travados.map(({ item, motivo }) => (
-                  <Linha key={item.id} item={item}>
+                  <LinhaItem key={item.id} item={item} hoje={hoje}>
                     <ConteudoLinha
                       item={item}
                       mostrarTipo={false}
@@ -163,16 +158,16 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                           <MetaItem item={item} extras={item.etapas ? [etapasTexto(item.etapas)] : []} />
                         </>
                       }
-                      direita={<PillStatus categoria="travado" status="Travado" />}
+                      direita={<RotuloItem item={item} hoje={hoje} />}
                     />
-                  </Linha>
+                  </LinhaItem>
                 ))}
               </ul>
             </Secao>
           )}
 
           {edicao.avisoNaoUtil && (
-            <section aria-labelledby="s-aviso" className="mt-8 rounded-xl border border-aviso/30 bg-aviso/[0.07] px-4 pt-4 pb-2">
+            <section aria-labelledby="s-aviso" className="mt-8 overflow-hidden rounded-xl border border-aviso/30 bg-aviso/[0.07] px-4 pt-4 pb-2">
               <h2 id="s-aviso" className="titulo-secao flex items-center gap-2 text-aviso">
                 <CalendarClock aria-hidden size={20} strokeWidth={2} />
                 {tituloAvisoNaoUtil(edicao.data, edicao.avisoNaoUtil.proximoDiaUtil, cfg)}
@@ -180,7 +175,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
               <ul className="mt-1">
                 {edicao.avisoNaoUtil.itens.map(({ item, rotulo }) => (
                   <li key={item.id} className="border-b border-aviso/20 last:border-b-0">
-                    <BotaoItem item={item} className="-mx-4 w-[calc(100%+2rem)] px-4">
+                    <BotaoItem item={item} nivel={nivelUrgencia(item, hoje, cfg)} className="-mx-4 w-[calc(100%+2rem)] px-4">
                       <span className="block min-w-0 flex-1 py-3">
                         <span className="block text-[0.9375rem] font-semibold text-aviso">{rotulo}</span>
                         <span className="nome-item">{item.nome}</span>
@@ -198,6 +193,8 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
           {edicao.semPrazo.length > 0 && <p className="mt-10 text-[0.9375rem] text-tinta-2">{semPrazoTexto(edicao.semPrazo.length)}</p>}
         </>
       )}
+
+      <LegendaNiveis regras={textosLegenda(cfg)} />
     </>
   );
 }

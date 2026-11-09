@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { dataPorExtenso, hoje, horaMinuto, saudacao } from "@/lib/calendario";
+import { hoje, horaMinuto, saudacao } from "@/lib/calendario";
 import { getConfig, leitorPorEmail } from "@/lib/config";
 import { dataCurta } from "@/lib/formato";
 import { criarClienteServidor } from "@/lib/supabase/server";
+import { AberturaDiaria } from "@/components/pauta/abertura-diaria";
 import { AlternarValores } from "@/components/pauta/alternar-valores";
 import { CabecalhoApp } from "@/components/pauta/cabecalho-app";
 import { Atualizado } from "@/components/pauta/atualizado";
@@ -43,8 +44,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
               </form>
             </>
           }
-          saudacao={`${saudacao(hora.h)}, ${leitor.nome}. Estas são as prioridades de hoje.`}
-          dataExtenso={<time dateTime={dia}>{dataPorExtenso(dia)}</time>}
+          saudacao={`${saudacao(hora.h)}, ${leitor.nome}`}
           dataCompacta={<time dateTime={dia}>{dataCurta(dia)}</time>}
           // Suspense: a leitura do monday (cache frio ~2 s) não bloqueia o cabeçalho.
           atualizado={
@@ -60,6 +60,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
         </main>
 
         <BarraAbas />
+        <AberturaDiaria />
       </div>
     </ProvedorDetalhe>
   );

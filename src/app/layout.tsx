@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader } from "next/font/google";
+import { scriptAbertura } from "@/lib/abertura";
+import { getConfig } from "@/lib/config";
 import "./globals.css";
 
 // Newsreader só no cabeçalho e manchetes; o corpo usa a fonte do sistema.
@@ -34,6 +36,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="pt-BR" className={newsreader.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_OCULTAR_VALORES }} />
+        {/* Abertura diária: decide antes da primeira pintura (veja lib/abertura.ts) */}
+        <script dangerouslySetInnerHTML={{ __html: scriptAbertura(getConfig().timezone) }} />
       </head>
       <body className="min-h-dvh bg-papel text-tinta">{children}</body>
     </html>

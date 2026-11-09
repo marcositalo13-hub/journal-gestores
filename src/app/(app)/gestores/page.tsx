@@ -41,6 +41,7 @@ export default async function PaginaGestores({ searchParams }: PageProps<"/gesto
         url={fotos[nome]}
         href={`/gestores/${slugDe(nome)}${qs}`}
         contagens={g?.contagens ?? { atrasados: 0, travados: 0, semPrazo: 0 }}
+        nivel={g?.nivel ?? null}
         grande={grande}
       />
     );

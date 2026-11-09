@@ -44,15 +44,18 @@ export function iniciais(nome: string): string {
   return letras.toLocaleUpperCase("pt-BR");
 }
 
-export type SeloGestor = { tipo: "pendencias"; n: number; rotulo: string } | { tipo: "sem-prazo"; n: number; rotulo: string };
+export type NivelSelo = "preto" | "vermelho" | "amarelo";
+export type SeloGestor = { tipo: "pendencias"; n: number; nivel: NivelSelo; rotulo: string } | { tipo: "atencao"; nivel: NivelSelo; rotulo: string };
 
 /**
- * Selo sobre a foto: círculo de alerta com (atrasados + travados) quando > 0;
- * senão, um ponto de aviso quando só há itens sem prazo; senão nada (em dia).
+ * Selo sobre a foto, na cor do pior item aberto do gestor (nivel; null = tudo em dia → sem selo).
+ * Círculo com (atrasados + travados) quando > 0; senão, um ponto com rótulo acessível.
  */
-export function seloGestor(c: { atrasados: number; travados: number; semPrazo: number }): SeloGestor | null {
+export function seloGestor(c: { atrasados: number; travados: number; semPrazo: number }, nivel: NivelSelo | null): SeloGestor | null {
+  if (nivel === null) return null;
   const p = c.atrasados + c.travados;
-  if (p > 0) return { tipo: "pendencias", n: p, rotulo: p === 1 ? "1 pendência" : `${p} pendências` };
-  if (c.semPrazo > 0) return { tipo: "sem-prazo", n: c.semPrazo, rotulo: c.semPrazo === 1 ? "1 item sem prazo" : `${c.semPrazo} itens sem prazo` };
-  return null;
+  if (p > 0) return { tipo: "pendencias", n: p, nivel, rotulo: p === 1 ? "1 pendência" : `${p} pendências` };
+  if (nivel === "vermelho") return { tipo: "atencao", nivel, rotulo: "Itens com prazo hoje" };
+  if (c.semPrazo > 0) return { tipo: "atencao", nivel, rotulo: c.semPrazo === 1 ? "1 item sem prazo" : `${c.semPrazo} itens sem prazo` };
+  return { tipo: "atencao", nivel, rotulo: "Prazos nos próximos dias" };
 }

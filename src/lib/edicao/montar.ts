@@ -2,6 +2,7 @@
 import { diasEntre, ehDiaUtil, proximoDiaUtil, rotuloDia, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
 import type { ItemEdicao, ItemJornal, ItemSemPrazo } from "./itens";
+import { piorNivelAberto, type Nivel } from "./urgencia";
 
 export interface ItemPendencia {
   item: ItemJornal;
@@ -38,6 +39,8 @@ export interface MancheteEdicao {
   item: ItemEdicao;
   motivo: string;
   regra: RegraManchete;
+  /** chamada factual acima do título: "Contrato · vence hoje", "Atrasado há 3 dias", "Travado" */
+  kicker: string;
 }
 
 export interface ResumoGestor {
@@ -55,6 +58,8 @@ export interface ResumoGestor {
     /** itens em aberto/travados sem nenhuma data */
     semPrazo: number;
   };
+  /** o pior nível entre os itens abertos do gestor (null: tudo em dia) */
+  nivel: Exclude<Nivel, "verde"> | null;
   /** itens com data no mês corrente até hoje (sem cancelados) */
   mes: { concluidos: number; total: number };
 }
@@ -80,6 +85,16 @@ const porDataENome = (a: ItemJornal, b: ItemJornal) => a.data.localeCompare(b.da
 
 function quando(dias: number): string {
   return dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`;
+}
+
+/** Kicker do contrato (dias corridos): "Contrato · vence hoje" | "Contrato · prazo amanhã" | "Contrato · prazo em N dias". */
+export function kickerContrato(dias: number): string {
+  return dias <= 0 ? "Contrato · vence hoje" : dias === 1 ? "Contrato · prazo amanhã" : `Contrato · prazo em ${dias} dias`;
+}
+
+/** Kicker da pendência: "Atrasado há 1 dia" / "Atrasado há N dias". */
+export function kickerPendencia(dias: number): string {
+  return `Atrasado há ${dias} ${dias === 1 ? "dia" : "dias"}`;
 }
 
 /** Nomes de todos abaixo de `nome` na hierarquia reporta_a (sem incluir `nome`). */
@@ -108,18 +123,19 @@ function escolherManchete(itens: ItemJornal[], pendencias: ItemPendencia[], trav
   const limCon = somarDias(hoje, m.contrato_antecedencia_dias);
   const contratos = itens.filter((i) => i.tipo === "Contrato" && naoConcluido(i) && i.data >= hoje && i.data <= limCon).sort(porDataENome);
   if (contratos[0]) {
-    return { item: contratos[0], regra: "contrato", motivo: `Contrato com prazo ${quando(diasEntre(hoje, contratos[0].data))}.` };
+    const dias = diasEntre(hoje, contratos[0].data);
+    return { item: contratos[0], regra: "contrato", motivo: `Contrato com prazo ${quando(dias)}.`, kicker: kickerContrato(dias) };
   }
 
   // (b) pendência mais antiga
   if (pendencias[0]) {
     const { item, diasAtraso } = pendencias[0];
-    return { item, regra: "pendencia", motivo: `Atrasado há ${diasAtraso} ${diasAtraso === 1 ? "dia" : "dias"}.` };
+    return { item, regra: "pendencia", motivo: `Atrasado há ${diasAtraso} ${diasAtraso === 1 ? "dia" : "dias"}.`, kicker: kickerPendencia(diasAtraso) };
   }
 
   // (c) qualquer travado
   if (travados[0]) {
-    return { item: travados[0].item, regra: "travado", motivo: travados[0].motivo ?? "Item travado, sem motivo informado." };
+    return { item: travados[0].item, regra: "travado", motivo: travados[0].motivo ?? "Item travado, sem motivo informado.", kicker: "Travado" };
   }
   return null;
 }
@@ -144,6 +160,7 @@ function resumirGestores(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: Da
         semPrazo: meusSemPrazo.length,
       },
       mes: { concluidos: mes.filter((i) => i.categoria === "concluido").length, total: mes.length },
+      nivel: piorNivelAberto([...meus, ...meusSemPrazo], hoje, cfg),
     };
   };
   return [...cfg.gestores.map((g) => resumo(g.nome, g.area, g.reporta_a)), ...extras.map((d) => resumo(d, null, null))];

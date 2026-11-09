@@ -1,8 +1,11 @@
 import { Fragment, type ReactNode } from "react";
-import { areaCurta } from "@/lib/config";
+import type { DataISO } from "@/lib/calendario";
+import { areaCurta, getConfig } from "@/lib/config";
 import type { ItemEdicao } from "@/lib/edicao/itens";
+import { urgenciaDoItem } from "@/lib/edicao/urgencia";
 import { cn } from "@/lib/utils";
 import { BotaoItem } from "./botao-item";
+import { RotuloNivel } from "./nivel";
 import { Valor } from "./valor";
 
 export function Secao({ id, titulo, children, alerta, pequeno }: { id: string; titulo: string; children: ReactNode; alerta?: boolean; pequeno?: boolean }) {
@@ -16,13 +19,21 @@ export function Secao({ id, titulo, children, alerta, pequeno }: { id: string; t
   );
 }
 
-/** Linha tocável (abre a folha de detalhes). */
-export function LinhaItem({ item, children }: { item: ItemEdicao; children: ReactNode }) {
+/** Linha tocável (abre a folha de detalhes), com a barra de 4px na cor do nível do item (em relação a `hoje`). */
+export function LinhaItem({ item, hoje, children }: { item: ItemEdicao; hoje: DataISO; children: ReactNode }) {
   return (
     <li className="border-b border-borda last:border-b-0">
-      <BotaoItem item={item}>{children}</BotaoItem>
+      <BotaoItem item={item} nivel={urgenciaDoItem(item, hoje, getConfig()).nivel}>
+        {children}
+      </BotaoItem>
     </li>
   );
+}
+
+/** Texto do nível do item ("Atrasado há 3 dias", "Vence hoje", "Em dia"...), com a mesma cor da barra. */
+export function RotuloItem({ item, hoje, className }: { item: ItemEdicao; hoje: DataISO; className?: string }) {
+  const { nivel, rotulo } = urgenciaDoItem(item, hoje, getConfig());
+  return <RotuloNivel nivel={nivel} rotulo={rotulo} className={className} />;
 }
 
 /**

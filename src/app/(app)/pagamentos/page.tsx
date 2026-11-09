@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
-import { PillStatus } from "@/components/pauta/pill-status";
-import { LinhaItem, MetaItem, Secao } from "@/components/pauta/secao";
+import { LinhaItem, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
 import { Valor } from "@/components/pauta/valor";
-import { dataPorExtenso, hoje } from "@/lib/calendario";
+import { dataPorExtenso, hoje, type DataISO } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { dataDeTeste, fixturePagamentosAtiva } from "@/lib/edicao/data-dev";
 import { fixturePagamentos } from "@/lib/edicao/fixture-pagamentos";
 import type { ItemJornal } from "@/lib/edicao/itens";
 import { obterItens } from "@/lib/edicao/obter";
 import { montarPagamentos, type TotaisMes } from "@/lib/edicao/pagamentos";
-import { dataCurta, haDias } from "@/lib/formato";
+import { dataCurta } from "@/lib/formato";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Pagamentos" };
@@ -55,19 +53,17 @@ function BlocoMes({ t, pequeno }: { t: TotaisMes; pequeno?: boolean }) {
 
 interface LinhaPag {
   item: ItemJornal;
-  /** selo sob a linha do gestor/valor (padrão: status). Fica numa linha própria: no celular não cabe ao lado do valor. */
-  selo?: ReactNode;
   /** mostra "venc. dd de mmm" ao lado do selo */
   vencimento?: boolean;
   /** texto acima da linha do gestor (ex.: motivo de um travado) */
   motivo?: string | null;
 }
 
-/** Linha de pagamento: nome / "{gestor} · {área} · {valor}" (uma linha) / selo + vencimento. */
-const Linhas = ({ itens }: { itens: LinhaPag[] }) => (
+/** Linha de pagamento: nome / "{gestor} · {área} · {valor}" (uma linha) / nível + vencimento. A barra de 4px tem a cor do nível. */
+const Linhas = ({ itens, hoje }: { itens: LinhaPag[]; hoje: DataISO }) => (
   <ul>
-    {itens.map(({ item, selo, vencimento, motivo }) => (
-      <LinhaItem key={item.id} item={item}>
+    {itens.map(({ item, vencimento, motivo }) => (
+      <LinhaItem key={item.id} item={item} hoje={hoje}>
         <ConteudoLinha
           item={item}
           mostrarTipo={false}
@@ -81,7 +77,7 @@ const Linhas = ({ itens }: { itens: LinhaPag[] }) => (
               )}
               <MetaItem item={item} />
               <span className="mt-1.5 flex items-center gap-2 text-[0.9375rem]">
-                {selo ?? <PillStatus categoria={item.categoria} status={item.status} />}
+                <RotuloItem item={item} hoje={hoje} className="max-w-none text-left" />
                 {vencimento && <span className="whitespace-nowrap">venc. {dataCurta(item.data)}</span>}
               </span>
             </>
@@ -135,13 +131,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
 
           {p.atrasados.length > 0 && (
             <Secao id="s-atrasados" titulo="Atrasados" alerta>
-              <Linhas
-                itens={p.atrasados.map(({ item, diasAtraso }) => ({
-                  item,
-                  vencimento: true,
-                  selo: <span className="whitespace-nowrap font-semibold text-alerta">{haDias(diasAtraso)}</span>,
-                }))}
-              />
+              <Linhas itens={p.atrasados.map(({ item }) => ({ item, vencimento: true }))} hoje={hojeEfetivo} />
             </Secao>
           )}
 
@@ -162,7 +152,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
                         <Valor valor={s.total} />
                       </span>
                     </div>
-                    <Linhas itens={s.itens.map((item) => ({ item }))} />
+                    <Linhas itens={s.itens.map((item) => ({ item }))} hoje={hojeEfetivo} />
                   </li>
                 ))}
               </ul>
@@ -171,13 +161,13 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
 
           {p.maioresDoMes.length > 0 && (
             <Secao id="s-maiores" titulo="Maiores do mês">
-              <Linhas itens={p.maioresDoMes.map((item) => ({ item, vencimento: true }))} />
+              <Linhas itens={p.maioresDoMes.map((item) => ({ item, vencimento: true }))} hoje={hojeEfetivo} />
             </Secao>
           )}
 
           {p.travados.length > 0 && (
             <Secao id="s-travados" titulo="Travados">
-              <Linhas itens={p.travados.map(({ item, motivo }) => ({ item, motivo, vencimento: true, selo: <PillStatus categoria="travado" status="Travado" /> }))} />
+              <Linhas itens={p.travados.map(({ item, motivo }) => ({ item, motivo, vencimento: true }))} hoje={hojeEfetivo} />
             </Secao>
           )}
         </>

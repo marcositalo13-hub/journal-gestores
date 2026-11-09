@@ -2,14 +2,17 @@
 
 import type { ReactNode } from "react";
 import type { ItemEdicao } from "@/lib/edicao/itens";
+import type { Nivel } from "@/lib/niveis";
 import { cn } from "@/lib/utils";
 import { useDetalhe } from "./detalhe";
+import { BarraNivel } from "./nivel";
 
 /** Qualquer linha ou a manchete: ao tocar, abre a folha de detalhes. O conteúdo vem do servidor. */
-export function BotaoItem({ item, className, children }: { item: ItemEdicao; className?: string; children: ReactNode }) {
+export function BotaoItem({ item, nivel = null, className, children }: { item: ItemEdicao; nivel?: Nivel | null; className?: string; children: ReactNode }) {
   const { abrir } = useDetalhe();
   return (
-    <button type="button" onClick={() => abrir(item)} className={cn("linha -mx-5 flex w-[calc(100%+2.5rem)] items-center gap-3 px-5 text-left", className)}>
+    <button type="button" onClick={() => abrir(item)} className={cn("linha relative -mx-5 flex w-[calc(100%+2.5rem)] items-center gap-3 px-5 text-left", className)}>
+      <BarraNivel nivel={nivel} />
       {children}
     </button>
   );

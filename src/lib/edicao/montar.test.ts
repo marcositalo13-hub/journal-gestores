@@ -179,6 +179,32 @@ describe("manchete", () => {
   });
 });
 
+describe("manchete: kicker factual", () => {
+  const con = (data: string) => mk({ tipo: "Contrato", data });
+  const kicker = (itens: ItemJornal[], hoje = "2026-10-06") => ed(itens, hoje).manchete?.kicker;
+
+  it("contrato: vence hoje / prazo amanhã / prazo em N dias (dias corridos)", () => {
+    expect(kicker([con("2026-10-06")])).toBe("Contrato · vence hoje");
+    expect(kicker([con("2026-10-07")])).toBe("Contrato · prazo amanhã");
+    expect(kicker([con("2026-10-08")])).toBe("Contrato · prazo em 2 dias");
+    expect(kicker([con("2026-10-16")])).toBe("Contrato · prazo em 10 dias");
+  });
+
+  it("pendência: Atrasado há N dia(s)", () => {
+    expect(kicker([mk({ data: "2026-10-05" })])).toBe("Atrasado há 1 dia");
+    expect(kicker([mk({ data: "2026-09-28" })])).toBe("Atrasado há 8 dias");
+  });
+
+  it("travado: Travado", () => {
+    expect(kicker([mk({ data: "2026-10-30", categoria: "travado" })])).toBe("Travado");
+  });
+
+  it("a expressão antiga nunca aparece", () => {
+    const todos = [con("2026-10-06"), con("2026-10-07"), con("2026-10-12"), mk({ data: "2026-10-01" }), mk({ data: "2026-10-30", categoria: "travado" })];
+    for (const i of todos) expect(kicker([i])).not.toMatch(/vencendo/i);
+  });
+});
+
 describe("itens cancelados nunca aparecem", () => {
   it("em nenhuma seção nem contagem", () => {
     const cancelados = [
