@@ -10,3 +10,9 @@ export function dataDeTeste(param: string | string[] | undefined, nodeEnv: strin
   const valida = dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
   return valida ? v : null;
 }
+
+/** ?fixture=pagamentos: dados de exemplo da aba Pagamentos, SOMENTE fora de produção. */
+export function fixturePagamentosAtiva(param: string | string[] | undefined, nodeEnv: string | undefined): boolean {
+  if (nodeEnv === "production") return false;
+  return (Array.isArray(param) ? param[0] : param) === "pagamentos";
+}

@@ -1,13 +1,14 @@
 import { Fragment, type ReactNode } from "react";
 import { areaCurta } from "@/lib/config";
 import type { ItemEdicao } from "@/lib/edicao/itens";
+import { cn } from "@/lib/utils";
 import { BotaoItem } from "./botao-item";
 import { Valor } from "./valor";
 
-export function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
+export function Secao({ id, titulo, children, alerta, pequeno }: { id: string; titulo: string; children: ReactNode; alerta?: boolean; pequeno?: boolean }) {
   return (
     <section aria-labelledby={id} className="mt-8 border-t border-borda pt-5">
-      <h2 id={id} className="titulo-secao mb-1">
+      <h2 id={id} className={cn("titulo-secao mb-1", alerta && "text-alerta", pequeno && "text-[1.0625rem]")}>
         {titulo}
       </h2>
       {children}

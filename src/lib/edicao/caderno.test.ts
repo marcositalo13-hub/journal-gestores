@@ -71,10 +71,25 @@ describe("montarCaderno", () => {
     expect([c.atrasados, c.travados, c.hoje, c.proximos14, c.semPrazo].every((x) => x.length === 0)).toBe(true);
   });
 
-  it("itens do quadro de Pagamentos (dono Solange Mata) aparecem no caderno dela", () => {
-    const aluguel = mk({ dono: "Solange Mata", tipoQuadro: "pagamentos", tipo: "Pagamento", valor: 80000, data: "2026-10-09", status: "Previsto" });
-    const c = cad([aluguel, mk({ dono: "Lucas Martins", data: "2026-10-09" })], "Solange Mata");
-    expect(c.proximos14).toEqual([{ data: "2026-10-09", ehDiaUtil: true, itens: [aluguel] }]);
+  it("itens do quadro de Pagamentos NÃO aparecem no caderno (têm aba própria), nem com equipe, nem como dono", () => {
+    const pagto = (dono: string, o: Partial<ItemJornal> = {}) =>
+      mk({ dono, tipoQuadro: "pagamentos", tipo: "Pagamento", valor: 80000, data: "2026-10-09", status: "Previsto", ...o });
+    const aluguel = pagto("Solange Mata");
+    const doLucas = pagto("Lucas Martins", { categoria: "travado" });
+    const atrasado = pagto("Solange Mata", { data: "2026-10-01" });
+    const semData = { ...pagto("Solange Mata"), data: null } as ItemSemPrazo;
+    const ativ = mk({ dono: "Lucas Martins", data: "2026-10-09" });
+    for (const equipe of [false, true]) {
+      const c = cad([aluguel, doLucas, atrasado, ativ], "Solange Mata", equipe, [semData]);
+      const json = JSON.stringify(c);
+      for (const p of [aluguel, doLucas, atrasado, semData]) expect(json).not.toContain(`"${p.id}"`);
+      expect(c.travados).toEqual([]);
+      expect(c.semPrazo).toEqual([]);
+      expect(c.mes).toEqual(equipe ? { concluidos: 0, total: 0 } : { concluidos: 0, total: 0 });
+    }
+    expect(cad([aluguel, doLucas, atrasado, ativ], "Solange Mata", true).proximos14.flatMap((d) => d.itens.map((i) => i.id))).toEqual([ativ.id]);
+    // um dono que só tem pagamentos não ganha caderno
+    expect(montarCaderno([pagto("Fulano Externo")], [], HOJE, cfg, "Fulano Externo", false)).toBeNull();
   });
 
   it("incluir equipe soma descendentes via reporta_a (inclusive a equipe do Lucas) e mantém o dono", () => {

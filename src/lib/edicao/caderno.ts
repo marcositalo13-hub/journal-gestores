@@ -3,7 +3,7 @@
 import { diasEntre, ehDiaUtil, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
 import type { ItemEdicao, ItemJornal, ItemSemPrazo } from "./itens";
-import { descendentes, type ItemPendencia, type ItemTravado } from "./montar";
+import { descendentes, ehAtividade, type ItemPendencia, type ItemTravado } from "./montar";
 
 export interface GrupoDia {
   data: DataISO;
@@ -66,14 +66,14 @@ export function montarCaderno(
   incluirEquipe: boolean,
 ): Caderno | null {
   const doConfig = cfg.gestores.find((g) => g.nome === nome);
-  const ehDono = [...itensBrutos, ...semPrazoBruto].some((i) => i.dono === nome);
+  const ehDono = [...itensBrutos, ...semPrazoBruto].filter(ehAtividade).some((i) => i.dono === nome);
   if (!doConfig && !ehDono) return null;
 
   const equipe = doConfig ? descendentes(nome, cfg) : [];
   const incluiEquipe = incluirEquipe && equipe.length > 0;
   const donos = new Set([nome, ...(incluiEquipe ? equipe : [])]);
-  const itens = itensBrutos.filter((i) => donos.has(i.dono) && i.categoria !== "cancelado");
-  const semPrazo = semPrazoBruto.filter((i) => donos.has(i.dono) && emAberto(i)).sort(porNome);
+  const itens = itensBrutos.filter((i) => ehAtividade(i) && donos.has(i.dono) && i.categoria !== "cancelado");
+  const semPrazo = semPrazoBruto.filter((i) => ehAtividade(i) && donos.has(i.dono) && emAberto(i)).sort(porNome);
 
   const atrasados: ItemPendencia[] = itens
     .filter((i) => i.data < hoje && emAberto(i))

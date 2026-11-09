@@ -32,7 +32,7 @@ export interface DiaSemana {
   itens: ItemJornal[];
 }
 
-export type RegraManchete = "pagamento" | "contrato" | "pendencia" | "travado";
+export type RegraManchete = "contrato" | "pendencia" | "travado";
 
 export interface MancheteEdicao {
   item: ItemEdicao;
@@ -78,11 +78,6 @@ export interface Edicao {
 const aberto = (i: ItemEdicao) => i.categoria === "aberto" || i.categoria === "travado";
 const porDataENome = (a: ItemJornal, b: ItemJornal) => a.data.localeCompare(b.data) || a.nome.localeCompare(b.nome, "pt-BR");
 
-function brl(v: number): string {
-  const f = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: Number.isInteger(v) ? 0 : 2 });
-  return f.format(v).replace(/ /g, " ");
-}
-
 function quando(dias: number): string {
   return dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`;
 }
@@ -109,30 +104,20 @@ function escolherManchete(itens: ItemJornal[], pendencias: ItemPendencia[], trav
   const m = cfg.manchete;
   const naoConcluido = (i: ItemJornal) => i.categoria === "aberto" || i.categoria === "travado";
 
-  // (a) pagamento relevante próximo do vencimento → maior valor
-  const limPag = somarDias(hoje, m.pagamento_antecedencia_dias);
-  const pagamentos = itens
-    .filter((i) => i.tipo === "Pagamento" && naoConcluido(i) && (i.valor ?? 0) >= m.pagamento_relevante_a_partir_de && i.data >= hoje && i.data <= limPag)
-    .sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0) || porDataENome(a, b));
-  if (pagamentos[0]) {
-    const p = pagamentos[0];
-    return { item: p, regra: "pagamento", motivo: `Pagamento de ${brl(p.valor ?? 0)} vence ${quando(diasEntre(hoje, p.data))}.` };
-  }
-
-  // (b) contrato próximo → o mais próximo
+  // (a) contrato próximo → o mais próximo (pagamentos têm aba própria e não concorrem à manchete)
   const limCon = somarDias(hoje, m.contrato_antecedencia_dias);
   const contratos = itens.filter((i) => i.tipo === "Contrato" && naoConcluido(i) && i.data >= hoje && i.data <= limCon).sort(porDataENome);
   if (contratos[0]) {
     return { item: contratos[0], regra: "contrato", motivo: `Contrato com prazo ${quando(diasEntre(hoje, contratos[0].data))}.` };
   }
 
-  // (c) pendência mais antiga
+  // (b) pendência mais antiga
   if (pendencias[0]) {
     const { item, diasAtraso } = pendencias[0];
     return { item, regra: "pendencia", motivo: `Atrasado há ${diasAtraso} ${diasAtraso === 1 ? "dia" : "dias"}.` };
   }
 
-  // (d) qualquer travado
+  // (c) qualquer travado
   if (travados[0]) {
     return { item: travados[0].item, regra: "travado", motivo: travados[0].motivo ?? "Item travado, sem motivo informado." };
   }
@@ -169,10 +154,13 @@ function resumirGestores(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: Da
  * @param hoje    data da edição (YYYY-MM-DD, São Paulo)
  * @param geradoEm instante da leitura dos dados (ISO)
  */
+/** Pagamentos vivem na aba própria: nunca entram em edição, cadernos nem contagens de atividades. */
+export const ehAtividade = (i: Pick<ItemJornal, "tipoQuadro">) => i.tipoQuadro !== "pagamentos";
+
 export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: JornalConfig, geradoEm: string, semPrazoBruto: ItemSemPrazo[] = []): Edicao {
-  const itens = itensBrutos.filter((i) => i.categoria !== "cancelado");
+  const itens = itensBrutos.filter((i) => i.categoria !== "cancelado" && ehAtividade(i));
   // sem prazo: só o que ainda exige ação (aberto/travado); cancelados e concluídos não precisam de data
-  const semPrazo = semPrazoBruto.filter(aberto).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const semPrazo = semPrazoBruto.filter(ehAtividade).filter(aberto).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   const secaoHoje = itens
     .filter((i) => i.data === hoje)

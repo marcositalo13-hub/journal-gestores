@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const ABAS = [
   { href: "/", rotulo: "Hoje" },
+  { href: "/pagamentos", rotulo: "Pagamentos" },
   { href: "/gestores", rotulo: "Gestores" },
 ] as const;
 

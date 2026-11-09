@@ -103,7 +103,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
         <ListaDoDia dia={outroDia} />
       ) : (
         <>
-          <Manchete manchete={edicao.manchete} hoje={edicao.data} />
+          <Manchete manchete={edicao.manchete} />
 
           <Secao id="s-hoje" titulo="Hoje">
             {gruposHoje.length === 0 ? (

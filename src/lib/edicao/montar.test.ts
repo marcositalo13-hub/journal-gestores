@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getConfig, type JornalConfig } from "../config";
-import type { ItemJornal } from "./itens";
+import type { ItemJornal, ItemSemPrazo } from "./itens";
 import { descendentes, montarEdicao } from "./montar";
 
 const cfg = getConfig();
@@ -143,29 +143,25 @@ describe("manchete", () => {
   const pend = () => mk({ data: "2026-10-05", nome: "Pendência" });
   const trav = () => mk({ data: "2026-10-30", categoria: "travado", observacao: "Sem verba" });
 
-  it("precedência a > b > c > d > null", () => {
+  it("precedência contrato > pendência > travado > null (pagamentos não concorrem)", () => {
     const p = pag(150_000, "2026-10-08");
     const c = con("2026-10-10");
     const pe = pend();
     const t = trav();
-    expect(ed([t, pe, c, p]).manchete).toMatchObject({ regra: "pagamento", item: { id: p.id } });
+    expect(ed([t, pe, c, p]).manchete).toMatchObject({ regra: "contrato", item: { id: c.id } });
     expect(ed([t, pe, c]).manchete).toMatchObject({ regra: "contrato", item: { id: c.id } });
     expect(ed([t, pe]).manchete).toMatchObject({ regra: "pendencia", item: { id: pe.id } });
     expect(ed([t]).manchete).toMatchObject({ regra: "travado", item: { id: t.id }, motivo: "Sem verba" });
     expect(ed([]).manchete).toBeNull();
   });
 
-  it("(a) valor mínimo, janela [hoje, hoje+7], não concluído; maior valor vence", () => {
-    expect(ed([pag(99_999, "2026-10-08")]).manchete).toBeNull();
-    expect(ed([pag(500_000, "2026-10-14")]).manchete).toBeNull(); // hoje+8
-    expect(ed([pag(500_000, "2026-10-13")]).manchete?.regra).toBe("pagamento"); // hoje+7
-    expect(ed([pag(500_000, "2026-10-06")]).manchete?.regra).toBe("pagamento"); // hoje
-    expect(ed([pag(500_000, "2026-10-05")]).manchete?.regra).toBe("pendencia"); // já venceu: vira pendência
-    expect(ed([pag(500_000, "2026-10-08", { categoria: "concluido" })]).manchete).toBeNull();
-    const menor = pag(120_000, "2026-10-07");
-    const maior = pag(300_000, "2026-10-12");
-    expect(ed([menor, maior]).manchete?.item.id).toBe(maior.id);
-    expect(ed([pag(100_000, "2026-10-08")]).manchete?.regra).toBe("pagamento"); // limite inclusivo
+  it("pagamento relevante vencendo NÃO vira manchete (regra removida): só o que sobra de atividades", () => {
+    expect(ed([pag(500_000, "2026-10-08")]).manchete).toBeNull();
+    expect(ed([pag(500_000, "2026-10-06")]).manchete).toBeNull();
+    const pe = pend();
+    expect(ed([pag(500_000, "2026-10-08"), pe]).manchete).toMatchObject({ regra: "pendencia", item: { id: pe.id } });
+    // nem um pagamento atrasado ou travado entra na manchete
+    expect(ed([pag(500_000, "2026-10-01"), pag(1, "2026-10-20", { categoria: "travado" })]).manchete).toBeNull();
   });
 
   it("(b) contrato: janela [hoje, hoje+10]; o mais próximo; não concluído", () => {
@@ -180,10 +176,6 @@ describe("manchete", () => {
     const velha = mk({ data: "2026-09-28" });
     const nova = mk({ data: "2026-10-05" });
     expect(ed([nova, velha]).manchete).toMatchObject({ regra: "pendencia", item: { id: velha.id }, motivo: "Atrasado há 8 dias." });
-  });
-
-  it("motivo do pagamento formata o valor em reais", () => {
-    expect(ed([pag(150_000, "2026-10-08")]).manchete?.motivo).toBe("Pagamento de R$ 150.000 vence em 2 dias.");
   });
 });
 
@@ -246,5 +238,39 @@ describe("descendentes", () => {
     const g = (nome: string, reporta_a: string) => ({ nome, area: "x", area_curta: "x", reporta_a, quadro_id: null });
     const ciclo = { ...cfg, gestores: [g("A", "B"), g("B", "A")] };
     expect(descendentes("A", ciclo)).toEqual(["B"]);
+  });
+});
+
+describe("pagamentos ficam fora da edição de atividades", () => {
+  const pag = (o: Partial<ItemJornal> & { data: string }) => mk({ tipoQuadro: "pagamentos", tipo: "Pagamento", valor: 1000, dono: "Keite Martins", ...o });
+  const ativ = (o: Partial<ItemJornal> & { data: string }) => mk({ dono: "Keite Martins", ...o });
+
+  it("nenhuma seção traz pagamentos: hoje, pendências, travados, aviso, semana, sem prazo, manchete, gestores", () => {
+    const hojeP = pag({ data: "2026-10-09" }); // sexta (hoje)
+    const atrasado = pag({ data: "2026-10-01" });
+    const travado = pag({ data: "2026-10-20", categoria: "travado", observacao: "sem NF" });
+    const fimDeSemana = pag({ data: "2026-10-10" });
+    const semana = pag({ data: "2026-10-13" });
+    const concluido = pag({ data: "2026-10-05", categoria: "concluido" });
+    const semPrazoP = { ...pag({ data: "2026-10-09" }), data: null } as ItemSemPrazo;
+    const a = ativ({ data: "2026-10-09", nome: "Atividade de hoje" });
+    const e = montarEdicao([hojeP, atrasado, travado, fimDeSemana, semana, concluido, a], "2026-10-09", cfg, "x", [semPrazoP]);
+    const ids = JSON.stringify(e);
+    for (const p of [hojeP, atrasado, travado, fimDeSemana, semana, concluido, semPrazoP]) expect(ids).not.toContain(`"${p.id}"`);
+    expect(e.hoje.map((i) => i.id)).toEqual([a.id]);
+    expect(e.pendencias).toEqual([]);
+    expect(e.travados).toEqual([]);
+    expect(e.avisoNaoUtil).toBeNull();
+    expect(e.semPrazo).toEqual([]);
+    expect(e.manchete).toBeNull();
+    // contagens do gestor só de atividades
+    const keite = e.gestores.find((g) => g.nome === "Keite Martins")!;
+    expect(keite.contagens).toEqual({ hoje: 1, atrasados: 0, travados: 0, semPrazo: 0 });
+    expect(keite.mes).toEqual({ concluidos: 0, total: 1 });
+  });
+
+  it("dono que só tem pagamentos não aparece como 'fora da estrutura'", () => {
+    const e = montarEdicao([pag({ data: "2026-10-09", dono: "Fulano Externo" })], "2026-10-09", cfg, "x");
+    expect(e.gestores.map((g) => g.nome)).toEqual(cfg.gestores.map((g) => g.nome));
   });
 });
