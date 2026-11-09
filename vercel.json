@@ -1,1 +1,7 @@
-{ "crons": [{ "path": "/api/cron/coletar", "schedule": "0 9-23 * * *" }] }
+{
+  "crons": [
+    { "path": "/api/cron/coletar", "schedule": "0 9-23 * * *" },
+    { "path": "/api/cron/notificar", "schedule": "*/5 10-23 * * *" },
+    { "path": "/api/cron/resumo", "schedule": "0 10 * * *" }
+  ]
+}

@@ -14,6 +14,7 @@ function pag(coord: Valor | null, o: Partial<ItemNormalizado> = {}): ItemNormali
     nome: `Pagamento ${n}`,
     url: "https://x.monday.com/1",
     updatedAt: "2026-10-05T10:00:00Z",
+    createdAt: "2026-10-05T10:00:00Z",
     grupo: { id: "g", titulo: "Outubro 2026" },
     noCadastro: false,
     valores: { "Valor (R$)": v({ number: 100, text: "100" }), ...(coord ? { Coordenação: coord } : {}) },

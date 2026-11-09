@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const SRC = resolve(__dirname, "..");
-const PROIBIDOS = ["lib/config", "lib/calendario", "lib/edicao/obter", "lib/monday/client", "lib/supabase/server", "lib/push/enviar", "lib/push/nucleo"];
+const PROIBIDOS = ["lib/config", "lib/calendario", "lib/edicao/obter", "lib/monday/client", "lib/supabase/server", "lib/push/enviar", "lib/push/nucleo", "lib/supabase/servico", "lib/notificacoes", "lib/monday"];
 
 function arquivos(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

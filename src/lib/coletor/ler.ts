@@ -5,14 +5,14 @@ import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo, parseRotulosDaColuna, resolverRotulo, type RotuloColuna } from "../rotulos";
 
 // ---------- tipos crus da API ----------
-interface ColunaApi {
+export interface ColunaApi {
   id: string;
   title: string;
   type: string;
   settings_str?: string | null;
   capabilities?: { calculated?: { function?: string | null } | null } | null;
 }
-interface ValorApi {
+export interface ValorApi {
   id: string;
   text: string | null;
   label?: string | null;
@@ -20,15 +20,16 @@ interface ValorApi {
   number?: number | null;
   values?: { label: string }[] | null;
 }
-interface SubitemApi {
+export interface SubitemApi {
   id: string;
   column_values: (ValorApi & { column?: { title: string } | null })[];
 }
-interface ItemApi {
+export interface ItemApi {
   id: string;
   name: string;
   url: string;
   updated_at: string;
+  created_at?: string | null;
   group: { id: string; title: string } | null;
   column_values: ValorApi[];
   subitems?: SubitemApi[] | null;
@@ -37,7 +38,7 @@ interface PaginaApi {
   cursor: string | null;
   items: ItemApi[];
 }
-interface QuadroApi {
+export interface QuadroApi {
   id: string;
   name: string;
   hierarchy_type: string | null;
@@ -108,6 +109,8 @@ export interface ItemNormalizado {
   nome: string;
   url: string;
   updatedAt: string;
+  /** criação do item no monday (ISO); usado pelas notificações */
+  createdAt: string;
   grupo: { id: string; titulo: string };
   noCadastro: boolean;
   /** valores das colunas mapeadas, por título (null se a coluna não existe no quadro) */
@@ -141,8 +144,8 @@ export interface QuadroLido {
 }
 
 // ---------- GraphQL ----------
-const ITEM_FIELDS = `
-  id name url updated_at
+export const ITEM_FIELDS = `
+  id name url updated_at created_at
   group { id title }
   column_values {
     id text
@@ -276,6 +279,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       nome: it.name,
       url: it.url,
       updatedAt: it.updated_at,
+      createdAt: it.created_at ?? it.updated_at,
       grupo,
       noCadastro: !porArea && grupo.titulo === cfg.grupo_cadastro,
       valores,

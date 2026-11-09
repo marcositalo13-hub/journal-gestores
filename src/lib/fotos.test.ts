@@ -101,9 +101,9 @@ describe("fotos nunca vão para arquivos públicos", () => {
   it("a service role nunca é lida pelo código do app (só pelos scripts locais)", () => {
     const procurar = (dir: string): string[] =>
       readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f)).map((f) => join(dir, f));
-    // única exceção: o envio de push (servidor), que lê as inscrições de todos os aparelhos sem sessão de usuário
+    // única exceção: supabase/servico.ts (só servidor), usado pelo envio de push e pela fila de notificações
     const vazando = procurar(join(RAIZ, "src"))
-      .filter((f) => !f.split(sep).join("/").endsWith("src/lib/push/enviar.ts"))
+      .filter((f) => !f.split(sep).join("/").endsWith("src/lib/supabase/servico.ts"))
       .filter((f) => readFileSync(f, "utf8").includes("SERVICE_ROLE"));
     expect(vazando).toEqual([]);
     expect(readFileSync(join(RAIZ, ".env.local.example"), "utf8")).toMatch(/Nunca em variáveis NEXT_PUBLIC/);

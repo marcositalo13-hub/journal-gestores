@@ -93,6 +93,7 @@ function pai(o: Partial<Omit<ItemNormalizado, "grupo">> & { grupo?: string; tipo
     nome: `Pai ${n}`,
     url: "https://x.monday.com/1",
     updatedAt: "2026-10-05T10:00:00Z",
+    createdAt: "2026-10-05T10:00:00Z",
     grupo: { id: "g", titulo: grupo },
     noCadastro: grupo === "Cadastro",
     valores: {},

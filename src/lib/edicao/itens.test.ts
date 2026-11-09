@@ -12,6 +12,7 @@ function item(o: Omit<Partial<ItemNormalizado>, "grupo"> & { grupo?: string }): 
     nome: `Item ${n}`,
     url: "https://brb.monday.com/boards/1/pulses/1",
     updatedAt: "2026-10-05T10:00:00Z",
+    createdAt: "2026-10-05T10:00:00Z",
     grupo: { id: "g", titulo: grupo },
     noCadastro: grupo === "Cadastro",
     valores: {},

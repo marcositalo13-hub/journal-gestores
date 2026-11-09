@@ -1,4 +1,6 @@
 import { CalendarClock } from "lucide-react";
+import { redirect } from "next/navigation";
+import { AbrirItem } from "@/components/pauta/abrir-item";
 import type { ReactNode } from "react";
 import { BotaoItem } from "@/components/pauta/botao-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
@@ -11,6 +13,7 @@ import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-d
 import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
+import { itemDaUrl } from "@/lib/edicao/item-da-url";
 import type { DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
 import { nivelUrgencia, textosLegenda } from "@/lib/edicao/urgencia";
@@ -59,6 +62,9 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   // ?data=YYYY-MM-DD simula outro dia, só fora de produção (em produção é ignorado).
   const params = await searchParams;
   const simulada = dataDeTeste(params.data, process.env.NODE_ENV);
+  // ?item=ID: aberto por uma notificação. Pagamentos abrem na aba deles.
+  const itemAberto = await itemDaUrl(params.item);
+  if (itemAberto?.tipoQuadro === "pagamentos") redirect(`/pagamentos?item=${itemAberto.id}`);
 
   const resultado = await (simulada ? obterEdicaoEm(simulada) : obterEdicao()).then(
     (edicao) => ({ edicao }),
@@ -87,6 +93,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
 
   return (
     <>
+      {itemAberto && <AbrirItem item={itemAberto} />}
       <CartaoNotificacoes />
       <NavegadorDias dias={dias} selecionado={outroDia?.data ?? edicao.data} />
 

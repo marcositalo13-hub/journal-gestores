@@ -169,10 +169,11 @@ describe("infraestrutura", () => {
     expect(sw).toMatch(/tag:/);
     expect(sw).toMatch(/\/apple-icon/);
   });
-  it("só enviar.ts lê a service role entre os arquivos de push, e é só de servidor", () => {
-    const f = readFileSync(resolve(RAIZ, "src/lib/push/enviar.ts"), "utf8");
+  it("a service role só é lida em supabase/servico.ts, que é só de servidor; enviar.ts também é só de servidor", () => {
+    const f = readFileSync(resolve(RAIZ, "src/lib/supabase/servico.ts"), "utf8");
     expect(f).toMatch(/^import "server-only"/m);
     expect(f).toMatch(/SUPABASE_SERVICE_ROLE_KEY/);
+    expect(readFileSync(resolve(RAIZ, "src/lib/push/enviar.ts"), "utf8")).toMatch(/^import "server-only"/m);
     expect(readFileSync(resolve(RAIZ, "src/lib/push/inscricao.ts"), "utf8")).not.toMatch(/SERVICE_ROLE/);
   });
 });

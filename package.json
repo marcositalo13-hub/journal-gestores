@@ -12,7 +12,8 @@
     "coletar": "tsx scripts/coletar.ts",
     "fotos:bucket": "tsx scripts/criar-bucket-fotos.ts",
     "fotos:enviar": "tsx scripts/enviar-fotos.ts",
-    "push:chaves": "tsx scripts/gerar-chaves-push.ts"
+    "push:chaves": "tsx scripts/gerar-chaves-push.ts",
+    "webhooks:registrar": "tsx scripts/registrar-webhooks.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

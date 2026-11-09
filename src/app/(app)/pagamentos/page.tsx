@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AbrirItem } from "@/components/pauta/abrir-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { LinhaItem, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
@@ -7,6 +8,7 @@ import { dataPorExtenso, hoje, type DataISO } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { dataDeTeste, fixturePagamentosAtiva } from "@/lib/edicao/data-dev";
 import { fixturePagamentos } from "@/lib/edicao/fixture-pagamentos";
+import { itemDaUrl } from "@/lib/edicao/item-da-url";
 import type { ItemJornal } from "@/lib/edicao/itens";
 import { obterItens } from "@/lib/edicao/obter";
 import { montarPagamentos, type TotaisMes } from "@/lib/edicao/pagamentos";
@@ -106,10 +108,12 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
   if (!itens) return <ErroEdicao />;
 
   const p = montarPagamentos(itens, hojeEfetivo, getConfig());
+  const itemAberto = await itemDaUrl(sp.item); // ?item=ID: aberto por uma notificação
   const maiorSaida = Math.max(0, ...p.saidasPorData.map((s) => s.total));
 
   return (
     <>
+      {itemAberto && <AbrirItem item={itemAberto} />}
       {(exemplo || sp.data) && (
         <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">
           {exemplo ? "Dados de exemplo" : "Simulando"} — {dataPorExtenso(hojeEfetivo)} (somente em desenvolvimento).

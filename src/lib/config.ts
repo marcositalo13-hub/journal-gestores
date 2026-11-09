@@ -14,6 +14,20 @@ export interface Leitor {
 export const RECORTES_FOTO = ["north", "center", "attention"] as const;
 export type RecorteFoto = (typeof RECORTES_FOTO)[number];
 
+export interface Notificacoes {
+  /** "HH:MM" (São Paulo): fora da janela nada é enviado; a fila vai para o resumo da manhã */
+  janela_inicio: string;
+  janela_fim: string;
+  /** intervalo mínimo entre envios "normais" (agrupados) */
+  agrupar_minutos: number;
+  /** R3: valor mínimo (R$) de um pagamento relevante */
+  pagamento_relevante: number;
+  /** R3: vencimento em até N dias corridos */
+  pagamento_antecedencia_dias: number;
+  /** R1/R4: item criado há no máximo N horas */
+  novo_horas: number;
+}
+
 export interface Urgencia {
   /** itens com prazo nos próximos N dias úteis ficam em "amarelo" (atenção) */
   atencao_dias_uteis: number;
@@ -81,6 +95,7 @@ export interface JornalConfig {
   considerar_facultativos_como_nao_util: boolean;
   manchete: Manchete;
   urgencia: Urgencia;
+  notificacoes: Notificacoes;
   /** recorte das fotos por slug ({"joao-silva": "center"}); o padrão é "north" */
   fotos_recorte?: Record<string, RecorteFoto>;
   feriados: string[];
@@ -255,6 +270,27 @@ export function validarConfig(c: unknown): JornalConfig {
   if (typeof o.urgencia !== "object" || o.urgencia === null) erros.push(`"urgencia" deve ser objeto`);
   else if (typeof uc.atencao_dias_uteis !== "number" || !Number.isInteger(uc.atencao_dias_uteis) || uc.atencao_dias_uteis < 1) {
     erros.push(`urgencia.atencao_dias_uteis deve ser número inteiro >= 1`);
+  }
+  const nt = (o.notificacoes ?? {}) as Record<string, unknown>;
+  if (typeof o.notificacoes !== "object" || o.notificacoes === null) erros.push(`"notificacoes" deve ser objeto`);
+  else {
+    const hhmm = (k: string) => {
+      const v = nt[k];
+      const m = typeof v === "string" ? /^(\d{2}):(\d{2})$/.exec(v) : null;
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) erros.push(`notificacoes.${k} deve ser "HH:MM"`);
+    };
+    hhmm("janela_inicio");
+    hhmm("janela_fim");
+    if (typeof nt.janela_inicio === "string" && typeof nt.janela_fim === "string" && nt.janela_inicio >= nt.janela_fim) {
+      erros.push(`notificacoes.janela_inicio deve ser antes de janela_fim`);
+    }
+    for (const k of ["agrupar_minutos", "pagamento_antecedencia_dias", "novo_horas"]) {
+      const v = nt[k];
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1) erros.push(`notificacoes.${k} deve ser número inteiro >= 1`);
+    }
+    if (typeof nt.pagamento_relevante !== "number" || !Number.isFinite(nt.pagamento_relevante) || nt.pagamento_relevante < 0) {
+      erros.push(`notificacoes.pagamento_relevante deve ser número >= 0`);
+    }
   }
   if (o.fotos_recorte !== undefined) {
     const fr = o.fotos_recorte;

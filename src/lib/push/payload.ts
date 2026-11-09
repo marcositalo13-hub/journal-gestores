@@ -15,6 +15,16 @@ export function temValor(texto: string): boolean {
   return PARECE_VALOR.test(texto);
 }
 
+/** Remove o que parece valor em dinheiro de um texto vindo do monday (ex.: nome de item "Aluguel R$ 12.000,00"). */
+export function limparValores(texto: string): string {
+  return texto
+    .replace(/R\$\s*[\d.,]*/gi, "")
+    .replace(/\d[\d.]*,\d{2}\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([·,:;)])/g, "$1")
+    .trim();
+}
+
 /** JSON do payload (title, body, tag, url). Recusa texto com valores e URLs que não sejam caminhos internos. */
 export function montarPayload({ titulo, corpo, tag, url = "/" }: EntradaNotificacao): string {
   if (temValor(titulo) || temValor(corpo)) throw new Error("O texto da notificação não pode conter valores monetários.");
