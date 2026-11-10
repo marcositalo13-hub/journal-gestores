@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getConfig, type JornalConfig } from "../config";
 import type { ItemJornal, ItemSemPrazo } from "./itens";
-import { descendentes, montarEdicao } from "./montar";
+import { descendentes, montarEdicao, secoesDeHoje } from "./montar";
 
 const cfg = getConfig();
 const GERADO = "2026-10-06T14:50:00.000Z";
@@ -329,5 +329,77 @@ describe("pagamentos ficam fora da edição de atividades", () => {
   it("dono que só tem pagamentos não aparece como 'fora da estrutura'", () => {
     const e = montarEdicao([pag({ data: "2026-10-09", dono: "Fulano Externo" })], "2026-10-09", cfg, "x");
     expect(e.gestores.map((g) => g.nome)).toEqual(cfg.gestores.map((g) => g.nome));
+  });
+});
+
+describe("Contratos para análise", () => {
+  const HOJE = "2026-11-10";
+  const nda = (o: Partial<ItemJornal> = {}) => mk({ nome: "Assinatura NDA Embracon", tipo: "Contrato", data: "2026-11-11", dono: "Solange Mata", ...o });
+  const e = (itens: ItemJornal[]) => ed(itens, HOJE);
+  const todasAsSecoes = (x: ReturnType<typeof secoesDeHoje>) => [
+    ...x.atrasados.map((p) => p.item.id),
+    ...x.contratos.map((i) => i.id),
+    ...x.hoje.map((i) => i.id),
+    ...x.travados.map((t) => t.item.id),
+    ...x.semPrazo.map((i) => i.id),
+  ];
+
+  it("o NDA de amanhã aparece em Contratos quando a manchete é um item atrasado", () => {
+    const c = nda();
+    const atrasado = mk({ nome: "Material Panorama", data: "2026-11-09" });
+    const ed1 = e([c, atrasado]);
+    expect(ed1.manchete?.item.id).toBe(atrasado.id);
+    const s = secoesDeHoje(ed1);
+    expect(s.contratos.map((i) => i.id)).toEqual([c.id]);
+    expect(s.atrasados.map((p) => p.item.id)).toEqual([]); // o atrasado é a manchete: não se repete
+  });
+
+  it("janela [hoje, hoje + 10]: hoje e +10 entram; +11 não; ordenados por data e nome", () => {
+    const a = nda({ nome: "B", data: "2026-11-20" });
+    const b = nda({ nome: "A", data: "2026-11-20" });
+    const c = nda({ nome: "C", data: "2026-11-10" });
+    const longe = nda({ nome: "Longe", data: "2026-11-21" });
+    expect(e([a, b, c, longe]).contratos.map((i) => i.nome)).toEqual(["C", "A", "B"]);
+  });
+
+  it("o contrato que é a manchete não se repete na seção", () => {
+    const c = nda();
+    const ed1 = e([c]);
+    expect(ed1.manchete?.item.id).toBe(c.id);
+    expect(ed1.contratos.map((i) => i.id)).toEqual([c.id]); // a edição o traz...
+    expect(secoesDeHoje(ed1).contratos).toEqual([]); // ...e a tela Hoje o tira
+  });
+
+  it("contrato atrasado fica só em Atrasados; concluído, cancelado e travado não entram; outros tipos não", () => {
+    const atrasado = nda({ data: "2026-11-09" });
+    const outros = [nda({ categoria: "concluido" }), nda({ categoria: "cancelado" }), nda({ categoria: "travado" }), mk({ tipo: "Entrega", data: "2026-11-11" })];
+    const ed1 = e([atrasado, ...outros]);
+    expect(ed1.contratos).toEqual([]);
+    expect(ed1.pendencias.map((p) => p.item.id)).toEqual([atrasado.id]);
+  });
+
+  it("contrato que vence hoje aparece em Contratos, não em Hoje", () => {
+    const c = nda({ data: HOJE });
+    const comum = mk({ nome: "Outra de hoje", data: HOJE });
+    const urgente = mk({ nome: "Atrasada", data: "2026-11-01" }); // vira a manchete
+    const s = secoesDeHoje(e([c, comum, urgente]));
+    expect(s.contratos.map((i) => i.id)).toEqual([c.id]);
+    expect(s.hoje.map((i) => i.id)).toEqual([comum.id]);
+  });
+
+  it("nenhum item aparece em duas seções", () => {
+    const itens = [
+      nda({ data: HOJE }),
+      nda({ nome: "Outro contrato", data: "2026-11-15" }),
+      nda({ nome: "Contrato atrasado", data: "2026-11-05" }),
+      nda({ nome: "Contrato travado", data: "2026-11-12", categoria: "travado" }),
+      mk({ nome: "Comum hoje", data: HOJE }),
+      mk({ nome: "Atrasada", data: "2026-11-01" }),
+      mk({ nome: "Travada", data: "2026-12-30", categoria: "travado" }),
+    ];
+    const ed1 = montarEdicao(itens, HOJE, cfg, GERADO, [{ ...mk({ nome: "Sem data", data: HOJE }), data: null, motivo: "sem_prazo" } as ItemSemPrazo]);
+    const ids = todasAsSecoes(secoesDeHoje(ed1));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).not.toContain(ed1.manchete!.item.id);
   });
 });

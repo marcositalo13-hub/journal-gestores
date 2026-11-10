@@ -11,11 +11,11 @@ import { Manchete } from "@/components/pauta/manchete";
 import { RotuloNivel } from "@/components/pauta/nivel";
 import { LinhaItem, LinhaSemPrazo, MetaItem, RotuloItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
-import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
+import { dataPorExtenso, diasEntre, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
 import { areaCurta, getConfig } from "@/lib/config";
 import { dataDeTeste } from "@/lib/edicao/data-dev";
 import { itemDaUrl } from "@/lib/edicao/item-da-url";
-import type { DiaSemana } from "@/lib/edicao/montar";
+import { secoesDeHoje, type DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
 import { nivelUrgencia, textosLegenda } from "@/lib/edicao/urgencia";
 import { contagem, dataTitulo, etapasTexto, haDias } from "@/lib/formato";
@@ -88,15 +88,8 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   const outroDia = proximos.find((d) => d.data === params.dia) ?? null;
 
   // "Hoje" agrupado por gestor, na ordem do config (donos fora do config vêm por último).
-  // O item da manchete não se repete na própria seção.
-  const idManchete = edicao.manchete?.item.id;
-  const fora = <T extends { id: string }>(i: T) => i.id !== idManchete;
-  const atrasados = edicao.pendencias.filter((p) => fora(p.item));
-  const travados = edicao.travados.filter((t) => fora(t.item));
-  const semPrazo = edicao.semPrazo.filter(fora);
-  const hojeSemManchete = edicao.hoje.filter(fora);
-  // Se o único item de hoje é a própria manchete, a seção Hoje some (em vez de dizer "Nada vence hoje").
-  const hojeSoManchete = edicao.hoje.length > 0 && hojeSemManchete.length === 0;
+  // Nenhum item aparece em duas seções (veja secoesDeHoje).
+  const { atrasados, contratos, hoje: hojeSemManchete, travados, semPrazo, hojeSoManchete } = secoesDeHoje(edicao);
   const gruposHoje = edicao.gestores
     .map((g) => ({ nome: g.nome, itens: hojeSemManchete.filter((i) => i.dono === g.nome) }))
     .filter((g) => g.itens.length > 0);
@@ -132,6 +125,26 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
                     />
                   </LinhaItem>
                 ))}
+              </ul>
+            </Secao>
+          )}
+
+          {contratos.length > 0 && (
+            <Secao id="s-contratos" titulo="Contratos para análise">
+              <ul>
+                {contratos.map((item) => {
+                  const dias = diasEntre(hoje, item.data);
+                  return (
+                    <LinhaItem key={item.id} item={item} hoje={hoje}>
+                      <ConteudoLinha
+                        item={item}
+                        mostrarTipo={false}
+                        meta={<MetaItem item={item} />}
+                        direita={<RotuloNivel nivel={nivelUrgencia(item, hoje, cfg)} rotulo={dias <= 0 ? "Vence hoje" : dias === 1 ? "Amanhã" : `Em ${dias} dias`} />}
+                      />
+                    </LinhaItem>
+                  );
+                })}
               </ul>
             </Secao>
           )}

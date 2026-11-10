@@ -72,6 +72,8 @@ export interface Edicao {
   /** quando os dados foram lidos do monday (ISO) */
   geradoEm: string;
   hoje: ItemJornal[];
+  /** contratos abertos (não travados) com prazo em [hoje, hoje + manchete.contrato_antecedencia_dias]; atrasados ficam em pendencias */
+  contratos: ItemJornal[];
   pendencias: ItemPendencia[];
   travados: ItemTravado[];
   /** itens em aberto/travados sem data (nem nos subitens): precisam de um prazo no monday */
@@ -208,6 +210,11 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     .sort((a, b) => (a.data === null ? 1 : 0) - (b.data === null ? 1 : 0) || (a.data ?? "").localeCompare(b.data ?? "") || a.nome.localeCompare(b.nome, "pt-BR"))
     .map((item) => ({ item, motivo: item.observacao ?? null, diasTravado: null }));
 
+  const limiteContrato = somarDias(hoje, cfg.manchete.contrato_antecedencia_dias);
+  const contratos = itens
+    .filter((i) => i.tipo === "Contrato" && i.categoria === "aberto" && i.data >= hoje && i.data <= limiteContrato) // travados já estão em "travados"
+    .sort(porDataENome);
+
   let avisoNaoUtil: AvisoNaoUtil | null = null;
   if (ehDiaUtil(hoje, cfg) && !ehDiaUtil(somarDias(hoje, 1), cfg)) {
     const prox = proximoDiaUtil(hoje, cfg);
@@ -227,6 +234,7 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     data: hoje,
     geradoEm,
     hoje: secaoHoje,
+    contratos,
     pendencias,
     travados,
     semPrazo,
@@ -234,5 +242,25 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     semana,
     manchete: escolherManchete(itens, semPrazo, hoje, cfg),
     gestores: resumirGestores(itens, semPrazo, hoje, cfg),
+  };
+}
+
+/**
+ * Seções da tela Hoje sem repetir itens: o da manchete sai de todas as seções; um contrato em
+ * "Contratos para análise" não aparece também em "Hoje". `hojeSoManchete`: tudo o que vence hoje já está
+ * em outra parte (a seção Hoje some em vez de dizer "Nada vence hoje").
+ */
+export function secoesDeHoje(e: Pick<Edicao, "manchete" | "pendencias" | "contratos" | "hoje" | "travados" | "semPrazo">) {
+  const idManchete = e.manchete?.item.id;
+  const fora = <T extends { id: string }>(i: T) => i.id !== idManchete;
+  const idsContratos = new Set(e.contratos.map((c) => c.id));
+  const hoje = e.hoje.filter((i) => fora(i) && !idsContratos.has(i.id));
+  return {
+    atrasados: e.pendencias.filter((p) => fora(p.item)),
+    contratos: e.contratos.filter(fora),
+    hoje,
+    travados: e.travados.filter((t) => fora(t.item)),
+    semPrazo: e.semPrazo.filter(fora),
+    hojeSoManchete: e.hoje.length > 0 && hoje.length === 0,
   };
 }
