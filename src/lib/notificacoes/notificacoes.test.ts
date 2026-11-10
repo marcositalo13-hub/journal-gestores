@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import raw from "../../../config/jornal.config.json";
-import { getConfig, validarConfig } from "../config";
+import { validarConfig } from "../config";
 import { montarPayload, temValor } from "../push/payload";
 import { agrupar, nomeDoCorpo, planejarEnvios, textoResumo, type Pendente } from "./agrupar";
 import { dentroDaJanela, inicioDaJanelaDeHoje } from "./janela";
@@ -10,7 +10,7 @@ import { enviarPendentes, processarEvento, resumoDaManha, tratarEProcessar, type
 import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFila } from "./regras";
 import { tokenConfere, tratarWebhook } from "./webhook";
 
-const cfgOculta = getConfig(); // abas.pagamentos = false (estado atual)
+const cfgOculta = validarConfig({ ...raw, abas: { pagamentos: false, previa_para: [] } }); // aba oculta (estado anterior à liberação)
 const cfg = validarConfig({ ...raw, abas: { pagamentos: true, previa_para: [] } }); // link do pagamento testado com a aba visível
 const RAIZ = resolve(__dirname, "../../..");
 // terça, 10/11/2026, 10:00 em São Paulo
@@ -93,9 +93,9 @@ describe("R2: travado", () => {
 });
 
 describe("R3: pagamento novo aguardando aprovação", () => {
-  it("criado: imediata, título 'Aprovação pendente', corpo 'nome · vence dd/mm', sem valor", () => {
+  it("criado: imediata, título 'Autorização pendente', corpo 'nome · vence dd/mm', sem valor", () => {
     expect(av(criado, pag())).toEqual([
-      { chave_dedupe: "R3:201", regra: "R3", prioridade: "imediata", titulo: "Aprovação pendente", corpo: "Aluguel da sede · vence 13/11", url: "/pagamentos?item=201", item_id: "201" },
+      { chave_dedupe: "R3:201", regra: "R3", prioridade: "imediata", titulo: "Autorização pendente", corpo: "Aluguel da sede · vence 13/11", url: "/pagamentos?item=201", item_id: "201" },
     ]);
   });
   it("o item das regras nem carrega valor; um nome com valor sai limpo e o payload passa na trava", () => {
@@ -427,7 +427,7 @@ describe("aba Pagamentos oculta", () => {
   it("com a aba oculta a notificação de pagamento abre a tela Hoje ('/'), nunca /pagamentos", () => {
     expect(cfgOculta.abas.pagamentos).toBe(false);
     const [n] = avaliarRegras(criado, pag(), AGORA, cfgOculta);
-    expect(n).toMatchObject({ regra: "R3", prioridade: "imediata", titulo: "Aprovação pendente", url: "/" });
+    expect(n).toMatchObject({ regra: "R3", prioridade: "imediata", titulo: "Autorização pendente", url: "/" });
     expect(avaliarRegras(criado, ativ({ tipo: "Contrato" }), AGORA, cfgOculta)).toHaveLength(1); // atividades seguem
   });
   it("com a aba visível o link é /pagamentos", () => {

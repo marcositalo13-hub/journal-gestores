@@ -1,6 +1,6 @@
 // Planejamento puro (sem escrita): o que o coletor CRIARIA/MOVERIA no monday.
 import { ddmm, hoje as hojeSP, somarDias, type DataISO } from "../calendario";
-import { getConfig, type JornalConfig } from "../config";
+import { finalizarAposDiasDoQuadro, getConfig, type JornalConfig } from "../config";
 import { mesmoRotulo } from "../rotulos";
 import { montarOcorrencia, parseFrequencia, projetarOcorrencias, type Janela, type Ocorrencia } from "../recorrencia";
 import type { Aviso, QuadroLido } from "./ler";
@@ -96,20 +96,24 @@ function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref:
 
 /**
  * Plano de um quadro "lista" (Pagamentos): sem recorrência, sem Chave e sem grupos de mês.
- * Só finaliza: Autorizado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias vai para o grupo de finalizados.
+ * Só finaliza: Autorizado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias vai para o grupo de finalizados
+ * (com finalizar_apos_dias = 0 do quadro, vai na próxima rodada, qualquer que seja o Vencimento).
  * Itens sem Vencimento nunca são movidos (e já saem avisados como "obrigatória vazia").
  * Nunca grava colunas: o que o app autorizou (Status, Autorizado por/em) fica intacto; o item só muda de grupo.
  */
 export function planejarLista(q: QuadroLido, plano: PlanoQuadro, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
   const t = cfg.tipos_de_quadro[q.tipo];
-  const limite = somarDias(ref, -cfg.finalizar_apos_dias);
+  const qc = cfg.quadros.find((x) => x.id === q.id);
+  const dias = qc ? finalizarAposDiasDoQuadro(qc, cfg) : cfg.finalizar_apos_dias;
+  const limite = somarDias(ref, -dias);
   const finalizados = q.grupos.find((g) => g.titulo === q.grupoFinalizadas);
   if (!finalizados) return plano; // o aviso "grupo_finalizadas_ausente" já foi emitido na leitura
   for (const it of q.itens) {
     if (it.lista?.finalizada) continue;
     const encerrado = mesmoRotulo(it.status, t.status_concluido) || mesmoRotulo(it.status, t.status_cancelado);
-    if (encerrado && it.data && it.data <= limite) {
-      plano.acoesArea.push({ tipo: "seria_finalizado", itemId: it.id, itemNome: it.nome, data: it.data, status: it.status!, grupo: finalizados });
+    // dias = 0: move logo que o Status encerra, com ou sem Vencimento; senão exige Vencimento <= hoje - dias.
+    if (encerrado && (dias === 0 || (it.data && it.data <= limite))) {
+      plano.acoesArea.push({ tipo: "seria_finalizado", itemId: it.id, itemNome: it.nome, data: it.data ?? "", status: it.status!, grupo: finalizados });
     }
   }
   return plano;

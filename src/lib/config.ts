@@ -66,6 +66,10 @@ export interface QuadroConfig {
   dono: string;
   /** grupo de itens finalizados deste quadro (obrigatório em "lista"; nos demais vale o grupo_finalizadas global) */
   grupo_finalizadas?: string;
+  /** só "lista": grupo de volta para onde "Desfazer" devolve o item (achado pelo TÍTULO) */
+  grupo_abertos?: string;
+  /** substitui o finalizar_apos_dias global neste quadro; 0 = finaliza assim que o Status encerra (sem olhar a data) */
+  finalizar_apos_dias?: number;
 }
 
 export interface TipoQuadroConfig {
@@ -215,6 +219,8 @@ export function validarConfig(c: unknown): JornalConfig {
     if (typeof x?.dono !== "string") erros.push(`quadros[${i}].dono deve ser string`);
     if (x?.layout !== "por_mes" && x?.layout !== "por_area" && x?.layout !== "lista") erros.push(`quadros[${i}].layout deve ser "por_mes", "por_area" ou "lista": ${String(x?.layout)}`);
     if (x?.grupo_finalizadas !== undefined && (typeof x.grupo_finalizadas !== "string" || x.grupo_finalizadas.trim() === "")) erros.push(`quadros[${i}].grupo_finalizadas deve ser string não vazia`);
+    if (x?.grupo_abertos !== undefined && (typeof x.grupo_abertos !== "string" || x.grupo_abertos.trim() === "")) erros.push(`quadros[${i}].grupo_abertos deve ser string não vazia`);
+    if (x?.finalizar_apos_dias !== undefined && (typeof x.finalizar_apos_dias !== "number" || !Number.isInteger(x.finalizar_apos_dias) || x.finalizar_apos_dias < 0)) erros.push(`quadros[${i}].finalizar_apos_dias deve ser inteiro >= 0`);
     if (x?.layout === "lista" && typeof x.grupo_finalizadas !== "string") erros.push(`quadros[${i}]: layout lista exige grupo_finalizadas`);
     if (x?.layout === "por_mes" || x?.layout === "por_area") {
       const cols = (((o.tipos_de_quadro ?? {}) as Record<string, Record<string, unknown> | undefined>)[String(x?.tipo)]?.colunas ?? {}) as Record<string, unknown>;
@@ -362,6 +368,10 @@ export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = g
 }
 
 /** Grupo de itens finalizados do quadro (o do próprio quadro, senão o global). */
+export function finalizarAposDiasDoQuadro(qc: Pick<QuadroConfig, "finalizar_apos_dias">, cfg: JornalConfig = getConfig()): number {
+  return qc.finalizar_apos_dias ?? cfg.finalizar_apos_dias;
+}
+
 export function grupoFinalizadasDoQuadro(qc: Pick<QuadroConfig, "grupo_finalizadas">, cfg: JornalConfig = getConfig()): string {
   return qc.grupo_finalizadas ?? cfg.grupo_finalizadas;
 }

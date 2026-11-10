@@ -21,7 +21,7 @@ const COLUNAS = [
 ];
 const GRUPOS = [
   { id: "g1", title: "Pagamentos", position: "1" },
-  { id: "g2", title: "Finalizados", position: "2" },
+  { id: "g2", title: "Visualizados", position: "2" },
 ];
 
 interface P {
@@ -44,7 +44,7 @@ function api(o: P = {}) {
     url: "https://x",
     updated_at: "2026-11-05T10:00:00Z",
     created_at: "2026-11-05T10:00:00Z",
-    group: { id: grupo, title: grupo === "g1" ? "Pagamentos" : "Finalizados" },
+    group: { id: grupo, title: grupo === "g1" ? "Pagamentos" : "Visualizados" },
     column_values: [
       { id: "c_val", text: valor === null ? "" : String(valor), number: valor },
       { id: "c_venc", text: venc ?? "", date: venc },
@@ -66,7 +66,7 @@ const plano = (itens: ReturnType<typeof api>[], grupos = GRUPOS) => {
 describe("config do quadro de Pagamentos", () => {
   it("layout lista, grupo de finalizados próprio, sem Chave/Recorrência/Coordenação e sem grupos de mês", () => {
     expect(qc.layout).toBe("lista");
-    expect(qc.grupo_finalizadas).toBe("Finalizados");
+    expect(qc.grupo_finalizadas).toBe("Visualizados");
     const t = cfg.tipos_de_quadro.pagamentos;
     expect(Object.keys(t.colunas)).toEqual(["Valor (R$)", "Vencimento", "Status", "Observação", "Autorizado por", "Autorizado em"]);
     expect(t.status_inicial).toBe("Aguardando autorização");
@@ -82,7 +82,7 @@ describe("leitura (ler.ts)", () => {
     const q = ler([api(), api({ status: "Autorizado" })]);
     expect(q.avisos).toEqual([]);
     expect(q.layout).toBe("lista");
-    expect(q.grupoFinalizadas).toBe("Finalizados");
+    expect(q.grupoFinalizadas).toBe("Visualizados");
     expect(q.itens.every((i) => i.noCadastro === false && i.lista !== undefined && i.porArea === undefined)).toBe(true);
   });
 
@@ -109,26 +109,39 @@ describe("leitura (ler.ts)", () => {
   });
 });
 
-describe("finalizar: Autorizado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias", () => {
-  it("limite: 03/11 (hoje − 7) finaliza; 04/11 não", () => {
+describe("finalizar: pagamentos usam finalizar_apos_dias = 0 (sem olhar o Vencimento)", () => {
+  it("o quadro de Pagamentos tem 0 dias; as atividades seguem com 7", () => {
+    expect(qc.finalizar_apos_dias).toBe(0);
+    expect(cfg.finalizar_apos_dias).toBe(7);
+  });
+
+  it("Autorizado ou Cancelado vai na próxima rodada: vencimento futuro, passado, hoje ou ausente", () => {
     const { p } = plano([
-      api({ nome: "no limite", status: "Autorizado", venc: "2026-11-03" }),
-      api({ nome: "um dia depois", status: "Autorizado", venc: "2026-11-04" }),
-      api({ nome: "cancelado no limite", status: "Cancelado", venc: "2026-11-03" }),
-      api({ nome: "cancelado um dia depois", status: "Cancelado", venc: "2026-11-04" }),
+      api({ nome: "autorizado futuro", status: "Autorizado", venc: "2026-12-30" }),
+      api({ nome: "autorizado hoje", status: "Autorizado", venc: HOJE }),
+      api({ nome: "cancelado futuro", status: "Cancelado", venc: "2026-11-20" }),
+      api({ nome: "autorizado sem data", status: "Autorizado", venc: null }),
+      api({ nome: "cancelado antigo", status: "Cancelado", venc: "2026-01-01" }),
     ]);
-    expect(p.acoesArea.map((a) => a.tipo === "seria_finalizado" && a.itemNome)).toEqual(["no limite", "cancelado no limite"]);
+    expect(p.acoesArea.map((a) => a.tipo === "seria_finalizado" && a.itemNome)).toEqual(["autorizado futuro", "autorizado hoje", "cancelado futuro", "autorizado sem data", "cancelado antigo"]);
+    expect(p.acoes).toEqual([]);
+  });
+
+  it("com um limite em dias no quadro (ex.: 7), volta a valer Vencimento <= hoje - dias", () => {
+    const cfg7 = { ...cfg, quadros: cfg.quadros.map((x) => (x.id === qc.id ? { ...x, finalizar_apos_dias: 7 } : x)) };
+    const q = ler([api({ nome: "no limite", status: "Autorizado", venc: "2026-11-03" }), api({ nome: "um dia depois", status: "Autorizado", venc: "2026-11-04" }), api({ nome: "sem data", status: "Autorizado", venc: null })]);
+    const p = planejarQuadro(q, janelaPadrao(HOJE), cfg7, HOJE);
+    expect(p.acoesArea.map((a) => a.tipo === "seria_finalizado" && a.itemNome)).toEqual(["no limite"]);
   });
 
   it("move para o grupo Finalizados (id do grupo), com a data e o status", () => {
     const { p } = plano([api({ nome: "velho", status: "Autorizado", venc: "2026-10-01" })]);
-    expect(p.acoesArea).toEqual([expect.objectContaining({ tipo: "seria_finalizado", itemNome: "velho", data: "2026-10-01", status: "Autorizado", grupo: { id: "g2", titulo: "Finalizados" } })]);
+    expect(p.acoesArea).toEqual([expect.objectContaining({ tipo: "seria_finalizado", itemNome: "velho", data: "2026-10-01", status: "Autorizado", grupo: { id: "g2", titulo: "Visualizados" } })]);
   });
 
-  it("nunca move: aguardando (mesmo vencido), sem vencimento, sem status ou o que já está em Finalizados", () => {
+  it("nunca move: aguardando (mesmo vencido), sem status ou o que já está em Visualizados", () => {
     const { p } = plano([
       api({ nome: "aguardando antigo", status: "Aguardando autorização", venc: "2026-01-01" }),
-      api({ nome: "sem data", status: "Autorizado", venc: null }),
       api({ nome: "sem status", status: null, venc: "2026-01-01" }),
       api({ nome: "já finalizado", status: "Autorizado", venc: "2026-01-01", grupo: "g2" }),
     ]);
@@ -149,15 +162,15 @@ describe("finalizar: Autorizado ou Cancelado com Vencimento <= hoje - finalizar_
 });
 
 describe("o coletor nunca reverte nem sobrescreve o que o app autorizou", () => {
-  it("autorizado pelo app com vencimento recente ou futuro: nenhuma ação", () => {
-    const { p } = plano([api({ status: "Autorizado", por: "Egídio", em: HOJE, venc: "2026-11-20" }), api({ status: "Autorizado", por: "Egídio", em: HOJE, venc: "2026-11-04" })]);
-    expect(p.acoesArea).toEqual([]);
-    expect(p.acoes).toEqual([]);
+  it("o que sobrou fora de Visualizados (ex.: o app não conseguiu mover) vai na próxima rodada, só mudando de grupo", () => {
+    const { p } = plano([api({ status: "Autorizado", por: "Egídio", em: HOJE, venc: "2026-11-20" }), api({ status: "Autorizado", por: "Egídio", em: "2026-10-20", venc: "2026-10-30" }), api(), api({ venc: "2026-01-01" })]);
+    expect(p.acoesArea.map((a) => a.tipo)).toEqual(["seria_finalizado", "seria_finalizado"]);
+    expect(p.acoesArea.every((a) => a.tipo === "seria_finalizado" && a.grupo.titulo === "Visualizados")).toBe(true);
+    expect(p.acoes).toEqual([]); // nenhuma gravação de coluna: Status, Autorizado por/em ficam intactos
   });
-  it("autorizado e vencido há mais de 7 dias: só muda de grupo (seria_finalizado); nenhuma ação grava colunas", () => {
-    const { p } = plano([api({ status: "Autorizado", por: "Egídio", em: "2026-10-20", venc: "2026-10-30" }), api(), api({ venc: "2026-01-01" })]);
-    expect(p.acoesArea.map((a) => a.tipo)).toEqual(["seria_finalizado"]);
-    expect(p.acoes).toEqual([]);
+  it("já em Visualizados: nada a fazer", () => {
+    const { p } = plano([api({ status: "Autorizado", por: "Egídio", em: HOJE, grupo: "g2" })]);
+    expect(p.acoesArea).toEqual([]);
   });
 });
 

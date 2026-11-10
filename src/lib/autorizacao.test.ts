@@ -22,13 +22,16 @@ const pag = (o: Partial<PagamentoLido> = {}): PagamentoLido => ({
   autorizadoPor: null,
   autorizadoEm: null,
   colunas: { status: STATUS, por: { id: "por", type: "text", titulo: "Autorizado por" }, em: { id: "em", type: "date", titulo: "Autorizado em" } },
+  grupos: [{ id: "topics", titulo: "Pagamentos" }, { id: "g_vis", titulo: "Visualizados" }],
   ...o,
 });
 
 function deps(p: PagamentoLido | null, leitor: Leitor | null = EGIDIO, o: Partial<DepsAutorizacao> = {}) {
   const gravar = vi.fn(async () => {});
   const ler = vi.fn(async () => p);
-  return { d: { leitor, agora: AGORA, ler, gravar, cfg, ...o } as DepsAutorizacao, gravar, ler };
+  const mover = vi.fn(async (...args: string[]) => void args);
+  const log = vi.fn();
+  return { d: { leitor, agora: AGORA, ler, gravar, mover, log, cfg, ...o } as DepsAutorizacao, gravar, ler, mover, log };
 }
 
 describe("autorizar: regras", () => {
@@ -92,6 +95,51 @@ describe("autorizar: regras", () => {
     expect(a.gravar).not.toHaveBeenCalled();
     const b = deps(pag(), EGIDIO, { gravar: vi.fn(async () => Promise.reject(new Error("HTTP 500"))) });
     expect(await autorizar("501", b.d)).toEqual({ ok: false, erro: MSG.gravacao });
+  });
+});
+
+describe("grupos: autorizado vai para Visualizados; desfazer volta para Pagamentos", () => {
+  it("depois de gravar as colunas, move para 'Visualizados' (grupo achado pelo título)", async () => {
+    const ordem: string[] = [];
+    const { d } = deps(pag(), EGIDIO, { gravar: vi.fn(async () => void ordem.push("gravar")), mover: vi.fn(async () => void ordem.push("mover")) });
+    expect((await autorizar("501", d)).ok).toBe(true);
+    expect(ordem).toEqual(["gravar", "mover"]);
+    const m = deps(pag());
+    await autorizar("501", m.d);
+    expect(m.mover).toHaveBeenCalledWith("501", "g_vis");
+  });
+  it("falha ao mover: continua sucesso (o pagamento FOI autorizado) e registra no log", async () => {
+    const { d, gravar, log } = deps(pag(), EGIDIO, { mover: vi.fn(async () => Promise.reject(new Error("HTTP 500"))) });
+    expect(await autorizar("501", d)).toMatchObject({ ok: true, itemId: "501" });
+    expect(gravar).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/não foi possível mover para "Visualizados".*coletor/));
+  });
+  it("grupo ausente no quadro: sucesso, sem mover, com log", async () => {
+    const { d, mover, log } = deps(pag({ grupos: [{ id: "topics", titulo: "Pagamentos" }] }));
+    expect((await autorizar("501", d)).ok).toBe(true);
+    expect(mover).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/grupo "Visualizados" não existe/));
+  });
+  it("recusas e falha de gravação nunca movem", async () => {
+    const a = deps(pag({ status: "Autorizado", autorizadoPor: "Marcos" }));
+    await autorizar("501", a.d);
+    const b = deps(pag(), EGIDIO, { gravar: vi.fn(async () => Promise.reject(new Error("x"))) });
+    await autorizar("501", b.d);
+    expect(a.mover).not.toHaveBeenCalled();
+    expect(b.mover).not.toHaveBeenCalled();
+  });
+  it("desfazer: depois de reverter as colunas, volta para 'Pagamentos'; falha ao mover continua sucesso", async () => {
+    const aut = pag({ status: "Autorizado", autorizadoPor: "Egídio", autorizadoEm: "2026-11-10", statusAtualizadoEm: MIN(2) });
+    const { d, mover } = deps(aut);
+    expect((await desfazer("501", d)).ok).toBe(true);
+    expect(mover).toHaveBeenCalledWith("501", "topics");
+    const f = deps(aut, EGIDIO, { mover: vi.fn(async () => Promise.reject(new Error("x"))) });
+    expect((await desfazer("501", f.d)).ok).toBe(true);
+    expect(f.log).toHaveBeenCalled();
+  });
+  it("a API traz os grupos do quadro", () => {
+    const p = lerPagamentoDaApi({ id: "1", name: "x", board: { id: PAG, columns: [], groups: [{ id: "g", title: "Visualizados" }] }, column_values: [] }, cfg)!;
+    expect(p.grupos).toEqual([{ id: "g", titulo: "Visualizados" }]);
   });
 });
 

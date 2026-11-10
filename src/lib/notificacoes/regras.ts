@@ -122,14 +122,14 @@ export function avaliarRegras(evento: EventoItem, i: ItemParaRegras, agora: Date
     add({ chave_dedupe: `R2:${i.id}:${hoje}`, regra: "R2", prioridade: "normal", titulo: "Travado", corpo: `${prefixoArea(i, cfg)}: ${nome}` });
   }
 
-  // R3: pagamento novo aguardando a aprovação do diretor (com vencimento). Imediata; uma vez por pagamento.
+  // R3: pagamento novo aguardando a autorização do diretor (com vencimento). Imediata; uma vez por pagamento.
   // Nunca leva o valor: só o nome (sem valores) e o vencimento.
   if (possiveis.has("R3") && !ativ && i.categoria === "aberto" && i.data && ehNovo(i.criadoEm, agora, cfg)) {
     out.push({
       chave_dedupe: `R3:${i.id}`,
       regra: "R3",
       prioridade: "imediata",
-      titulo: "Aprovação pendente",
+      titulo: "Autorização pendente",
       corpo: `${nome} · vence ${ddmm(i.data)}`,
       item_id: i.id,
       url: urlDoPagamento(i.id, cfg),

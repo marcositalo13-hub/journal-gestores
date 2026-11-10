@@ -17,7 +17,7 @@
     {"nome":"Danielle Aquino","area":"Coordenação de Riscos Pessoais e Ramos Elementares","area_curta":"Riscos Pessoais e RE","reporta_a":"Lucas Martins","quadro_id":null}
   ],
   "quadros": [
-    {"id":"18434047675","tipo":"pagamentos","layout":"lista","dono":"Egídio","grupo_finalizadas":"Finalizados"},
+    {"id":"18434047675","tipo":"pagamentos","layout":"lista","dono":"Egídio","grupo_finalizadas":"Visualizados","grupo_abertos":"Pagamentos","finalizar_apos_dias":0},
     {"id":"18438464813","tipo":"atividades","layout":"por_area","dono":"Solange Mata"}
   ],
   "quadros_ignorados": ["18433983718","18433771734","18434048054"],
@@ -31,7 +31,7 @@
   },
   "empate_dia_util": "anterior",
   "considerar_facultativos_como_nao_util": true,
-  "abas": {"pagamentos": false, "previa_para": ["marcos.porto@brbseguros.com.br"]},
+  "abas": {"pagamentos": true, "previa_para": ["marcos.porto@brbseguros.com.br"]},
   "pagamentos": {"aprovacao_diretor_a_partir_de": 100000},
   "urgencia": {"atencao_dias_uteis": 3},
   "notificacoes": {"janela_inicio": "07:00", "janela_fim": "20:00", "agrupar_minutos": 15, "novo_horas": 24},

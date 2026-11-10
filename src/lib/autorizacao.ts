@@ -3,7 +3,7 @@
 import { ddmm, hoje as hojeSP } from "./calendario";
 import { valorMonday } from "./coletor/aplicar";
 import type { ColunaMapeada } from "./coletor/ler";
-import { getConfig, type JornalConfig, type Leitor } from "./config";
+import { getConfig, grupoFinalizadasDoQuadro, type JornalConfig, type Leitor } from "./config";
 import { mondayMutation, mondayQuery } from "./monday/client";
 import { mesmoRotulo, parseRotulosDaColuna, resolverRotulo } from "./rotulos";
 
@@ -23,6 +23,8 @@ export interface PagamentoLido {
   /** YYYY-MM-DD */
   autorizadoEm: string | null;
   colunas: { status: ColunaMapeada | null; por: ColunaMapeada | null; em: ColunaMapeada | null };
+  /** grupos do quadro (para achar "Visualizados" e "Pagamentos" pelo título) */
+  grupos?: { id: string; titulo: string }[];
 }
 
 export type ResultadoAutorizacao =
@@ -105,6 +107,8 @@ export interface DepsAutorizacao {
   agora: Date;
   ler(itemId: string): Promise<PagamentoLido | null>;
   gravar(boardId: string, itemId: string, valores: Record<string, unknown>): Promise<void>;
+  /** move o item de grupo; opcional (sem ele, o coletor cuida da mudança depois) */
+  mover?(itemId: string, grupoId: string): Promise<void>;
   cfg?: JornalConfig;
   log?(linha: string): void;
 }
@@ -130,15 +134,39 @@ async function executar(itemId: string, deps: DepsAutorizacao, planejar: typeof 
   return { plano, p };
 }
 
+/**
+ * Move o item para o grupo (achado pelo título) DEPOIS da gravação das colunas. Falhar aqui nunca desfaz nem reprova a
+ * operação: as colunas já valem; o que ficar fora do lugar o coletor acerta na próxima rodada (autorizados) ou o
+ * Status manda (desfeitos). Só loga.
+ */
+async function moverDepois(p: PagamentoLido, itemId: string, qual: "finalizadas" | "abertos", deps: DepsAutorizacao) {
+  const cfg = deps.cfg ?? getConfig();
+  const qc = cfg.quadros.find((q) => q.id === p.boardId);
+  const titulo = qc ? (qual === "finalizadas" ? grupoFinalizadasDoQuadro(qc, cfg) : qc.grupo_abertos) : undefined;
+  if (!titulo || !deps.mover) return;
+  const grupo = p.grupos?.find((g) => g.titulo.trim() === titulo.trim());
+  if (!grupo) {
+    deps.log?.(`[autorizacao] ${itemId}: grupo "${titulo}" não existe no quadro; item não movido`);
+    return;
+  }
+  try {
+    await deps.mover(itemId, grupo.id);
+  } catch (e) {
+    deps.log?.(`[autorizacao] ${itemId}: não foi possível mover para "${titulo}" (${e instanceof Error ? e.message : "erro desconhecido"}); o coletor acerta depois`);
+  }
+}
+
 export async function autorizar(itemId: string, deps: DepsAutorizacao): Promise<ResultadoAutorizacao> {
   const { plano, p } = await executar(itemId, deps, planejarAutorizacao);
   if (!plano.ok) return plano;
+  await moverDepois(p!, itemId, "finalizadas", deps);
   return { ok: true, itemId, nome: p!.nome, autorizadoPor: deps.leitor!.nome, autorizadoEm: hojeSP(deps.agora, deps.cfg ?? getConfig()) };
 }
 
 export async function desfazer(itemId: string, deps: DepsAutorizacao): Promise<ResultadoDesfazer> {
   const { plano, p } = await executar(itemId, deps, planejarDesfazer);
   if (!plano.ok) return plano;
+  await moverDepois(p!, itemId, "abertos", deps);
   return { ok: true, itemId, nome: p!.nome };
 }
 
@@ -148,9 +176,14 @@ const Q_ITEM = `
 query ($ids: [ID!]) {
   items(ids: $ids) {
     id name
-    board { id columns { id title type settings_str } }
+    board { id columns { id title type settings_str } groups { id title } }
     column_values { id text ... on StatusValue { label updated_at } ... on DateValue { date } }
   }
+}`;
+
+const M_MOVER = `
+mutation ($item_id: ID!, $group_id: String!) {
+  move_item_to_group(item_id: $item_id, group_id: $group_id) { id }
 }`;
 
 const M_GRAVAR = `
@@ -161,7 +194,7 @@ mutation ($board_id: ID!, $item_id: ID!, $valores: JSON!) {
 interface ItemApiAutorizacao {
   id: string;
   name: string;
-  board: { id: string; columns: { id: string; title: string; type: string; settings_str?: string | null }[] } | null;
+  board: { id: string; columns: { id: string; title: string; type: string; settings_str?: string | null }[]; groups?: { id: string; title: string }[] } | null;
   column_values: { id: string; text: string | null; label?: string | null; updated_at?: string | null; date?: string | null }[];
 }
 
@@ -187,6 +220,7 @@ export function lerPagamentoDaApi(it: ItemApiAutorizacao | undefined, cfg: Jorna
     autorizadoPor: por || null,
     autorizadoEm: em?.date ?? (em?.text ? em.text.slice(0, 10) : null),
     colunas,
+    grupos: (it.board.groups ?? []).map((g) => ({ id: g.id, titulo: g.title })),
   };
 }
 
@@ -197,6 +231,9 @@ export function depsMonday(leitor: Leitor | null, agora: Date = new Date()): Dep
     ler: async (itemId) => lerPagamentoDaApi((await mondayQuery<{ items: ItemApiAutorizacao[] }>(Q_ITEM, { ids: [itemId] })).items?.[0]),
     gravar: async (boardId, itemId, valores) => {
       await mondayMutation(M_GRAVAR, { board_id: boardId, item_id: itemId, valores: JSON.stringify(valores) });
+    },
+    mover: async (itemId, grupoId) => {
+      await mondayMutation(M_MOVER, { item_id: itemId, group_id: grupoId });
     },
     log: (l) => console.error(l),
   };

@@ -12,7 +12,7 @@ describe("config: sem coordenacoes nem multiseguros", () => {
   });
   it("o quadro de pagamentos é uma lista com grupo de finalizados próprio", () => {
     const q = getConfig().quadros.find((x) => x.tipo === "pagamentos")!;
-    expect(q).toMatchObject({ layout: "lista", dono: "Egídio", grupo_finalizadas: "Finalizados" });
+    expect(q).toMatchObject({ layout: "lista", dono: "Egídio", grupo_finalizadas: "Visualizados", grupo_abertos: "Pagamentos", finalizar_apos_dias: 0 });
   });
   it("layout lista exige grupo_finalizadas; layouts por_mes/por_area exigem Recorrência e Chave; status_travado só é obrigatório em atividades", () => {
     const quadros = (f: (q: Record<string, unknown>) => Record<string, unknown>) => raw.quadros.map((q) => (q.tipo === "pagamentos" ? f(q) : q));

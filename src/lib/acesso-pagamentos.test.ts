@@ -8,10 +8,14 @@ const oculta = (previa: string[]) => validarConfig({ ...raw, abas: { pagamentos:
 const visivel = validarConfig({ ...raw, abas: { pagamentos: true, previa_para: [] } });
 
 describe("acessoPagamentos", () => {
-  it("config real: aba oculta e a prévia é só do Marcos", () => {
+  it("config real: aba liberada (qualquer leitor abre) e a prévia segue listando só o Marcos", () => {
     const cfg = getConfig();
-    expect(cfg.abas.pagamentos).toBe(false);
+    expect(cfg.abas.pagamentos).toBe(true);
     expect(cfg.abas.previa_para).toEqual([MARCOS]);
+    for (const l of cfg.leitores) expect(acessoPagamentos(l.email, cfg), l.email).toEqual({ pode: true, oculta: false });
+  });
+  it("oculta (como estava): só o Marcos da config abre; os outros leitores não", () => {
+    const cfg = oculta(getConfig().abas.previa_para);
     expect(acessoPagamentos(MARCOS, cfg)).toEqual({ pode: true, oculta: true });
     for (const outro of cfg.leitores.map((l) => l.email).filter((e) => e !== MARCOS)) expect(acessoPagamentos(outro, cfg).pode, outro).toBe(false);
   });
