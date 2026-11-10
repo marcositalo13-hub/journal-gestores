@@ -113,6 +113,7 @@ const quadro = (itens: ItemNormalizado[], dono = "TESTE"): QuadroLido => ({
   tipo: "atividades",
   dono,
   layout: "por_mes",
+  grupoFinalizadas: "Atividades finalizadas",
   hierarchyType: "multi_level",
   grupos: [],
   colunas: {},

@@ -44,12 +44,12 @@ function diasUteisAte(hoje: DataISO, d: DataISO, cfg: JornalConfig): number {
 
 /**
  * Texto que acompanha a cor (a cor nunca é o único sinal):
- * "Atrasado há N dias", "Vence hoje", "Travado", "Amanhã", "Em N dias úteis", "Sem prazo", "Em dia", "Concluído" (pagamentos: "Pago").
+ * "Atrasado há N dias", "Vence hoje", "Travado", "Amanhã", "Em N dias úteis", "Sem prazo", "Em dia", "Concluído" (pagamentos: "Aprovado").
  */
 export function rotuloUrgencia(item: ItemUrgencia, hoje: DataISO, cfg: JornalConfig): string | null {
   const nivel = nivelUrgencia(item, hoje, cfg);
   if (nivel === null) return null;
-  if (item.categoria === "concluido") return item.tipoQuadro === "pagamentos" ? "Pago" : "Concluído";
+  if (item.categoria === "concluido") return item.tipoQuadro === "pagamentos" ? "Aprovado" : "Concluído";
   if (nivel === "preto" && item.data !== null) {
     const n = diasEntre(item.data, hoje);
     return `Atrasado há ${n} ${dia(n)}`;
@@ -96,7 +96,7 @@ export function textosLegenda(cfg: JornalConfig): RegraLegenda[] {
     { nivel: "preto", titulo: "Atrasado", regra: "O prazo já passou e o item não foi concluído." },
     { nivel: "vermelho", titulo: "Hoje ou travado", regra: "O prazo é hoje, ou o item está travado." },
     { nivel: "amarelo", titulo: "Atenção", regra: `O prazo vence nos próximos ${uteis}, ou o item está sem prazo.` },
-    { nivel: "verde", titulo: "Em dia", regra: `O prazo está a mais de ${uteis}, ou o item já foi concluído (pagamentos: pago).` },
+    { nivel: "verde", titulo: "Em dia", regra: `O prazo está a mais de ${uteis}, ou o item já foi concluído (pagamentos: aprovado).` },
   ];
 }
 

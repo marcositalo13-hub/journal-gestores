@@ -11,7 +11,7 @@ import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFi
 import { tokenConfere, tratarWebhook } from "./webhook";
 
 const cfgOculta = getConfig(); // abas.pagamentos = false (estado atual)
-const cfg = validarConfig({ ...raw, abas: { pagamentos: true } }); // regras de pagamento testadas com a aba visível
+const cfg = validarConfig({ ...raw, abas: { pagamentos: true } }); // link do pagamento testado com a aba visível
 const RAIZ = resolve(__dirname, "../../..");
 // terça, 10/11/2026, 10:00 em São Paulo
 const AGORA = new Date("2026-11-10T13:00:00Z");
@@ -39,12 +39,10 @@ const pag = (o: Partial<ItemParaRegras> = {}): ItemParaRegras => ({
   tipo: "Pagamento",
   categoria: "aberto",
   data: "2026-11-13",
-  criadoEm: HORAS(200),
+  criadoEm: HORAS(1),
   geradoPeloColetor: false,
   finalizada: false,
-  dono: "Keite Martins",
-  coordenacao: "Adm. e Financeira",
-  valor: 150_000,
+  dono: "Egídio",
   ...o,
 });
 const regras = (ns: NotificacaoFila[]) => ns.map((n) => n.regra);
@@ -70,7 +68,7 @@ describe("R1: nova para hoje/amanhã", () => {
     expect(av(criado, ativ({ geradoPeloColetor: true }))).toEqual([]);
     expect(av(coluna("Prazo"), ativ({ geradoPeloColetor: true }))).toEqual([]);
     expect(av(criado, ativ({ finalizada: true }))).toEqual([]);
-    expect(regras(av(criado, pag({ data: "2026-11-10", valor: 10 })))).toEqual([]);
+    expect(regras(av(criado, pag({ data: "2026-11-10" })))).toEqual(["R3"]); // pagamento tem a própria regra (R3), nunca a R1
   });
   it("não: mudanças em colunas que não são Prazo", () => {
     expect(av(coluna("Área"), ativ())).toEqual([]);
@@ -79,10 +77,10 @@ describe("R1: nova para hoje/amanhã", () => {
 });
 
 describe("R2: travado", () => {
-  it("Status virou Travado em atividades e em pagamentos", () => {
+  it("Status virou Travado em atividades (pagamentos não têm esse status)", () => {
     const a = av(coluna("Status"), ativ({ categoria: "travado", criadoEm: HORAS(500), data: "2026-12-30" }));
     expect(a).toEqual([expect.objectContaining({ regra: "R2", prioridade: "normal", titulo: "Travado", corpo: "Adm. e Financeira: Conciliação bancária", chave_dedupe: "R2:101:2026-11-10" })]);
-    expect(regras(av(coluna("Status"), pag({ categoria: "travado", valor: 10 })))).toEqual(["R2"]);
+    expect(regras(av(coluna("Status"), pag({ categoria: "travado" })))).toEqual([]);
   });
   it("travado por uma pessoa num item do coletor conta; criado já travado pelo coletor não", () => {
     expect(regras(av(coluna("Status"), ativ({ categoria: "travado", geradoPeloColetor: true, data: "2026-12-30" })))).toEqual(["R2"]);
@@ -94,27 +92,36 @@ describe("R2: travado", () => {
   });
 });
 
-describe("R3: pagamento relevante", () => {
-  it("≥ 100000, vence em até 7 dias, criado ou com valor/vencimento alterado; título com dia da semana; sem valor no texto", () => {
-    const [n] = av(coluna("Valor (R$)"), pag());
-    expect(n).toEqual({ chave_dedupe: "R3:201:2026-11-13", regra: "R3", prioridade: "normal", titulo: "Pagamento sexta, 13/11", corpo: "Adm. e Financeira: Aluguel da sede", url: "/?item=201", item_id: "201" });
-    expect(regras(av(coluna("Vencimento"), pag()))).toEqual(["R3"]);
-    expect(regras(av(criado, pag()))).toEqual(["R3"]);
-    expect(regras(av(criado, pag({ valor: 100_000, data: "2026-11-17" })))).toEqual(["R3"]); // limites
+describe("R3: pagamento novo aguardando aprovação", () => {
+  it("criado: imediata, título 'Aprovação pendente', corpo 'nome · vence dd/mm', sem valor", () => {
+    expect(av(criado, pag())).toEqual([
+      { chave_dedupe: "R3:201", regra: "R3", prioridade: "imediata", titulo: "Aprovação pendente", corpo: "Aluguel da sede · vence 13/11", url: "/pagamentos?item=201", item_id: "201" },
+    ]);
   });
-  it("não: abaixo do valor, depois de 7 dias, vencido, pago, cancelado, atividades, outra coluna", () => {
-    expect(av(criado, pag({ valor: 99_999.99 }))).toEqual([]);
-    expect(av(criado, pag({ data: "2026-11-18" }))).toEqual([]);
-    expect(av(criado, pag({ data: "2026-11-09" }))).toEqual([]);
+  it("o item das regras nem carrega valor; um nome com valor sai limpo e o payload passa na trava", () => {
+    const [n] = av(criado, pag({ nome: "Fornecedor X R$ 120.000,00" }));
+    expect(n.corpo).toBe("Fornecedor X · vence 13/11");
+    expect(temValor(n.titulo + n.corpo)).toBe(false);
+    expect(() => montarPayload({ titulo: n.titulo, corpo: n.corpo, tag: "t", url: n.url })).not.toThrow();
+    const [m] = av(criado, pag({ nome: "Parcela 150.000,00 do convênio" }));
+    expect(temValor(m.corpo)).toBe(false);
+  });
+  it("qualquer vencimento vale (vencido, hoje ou longe): só importa ser novo e aguardar aprovação", () => {
+    expect(regras(av(criado, pag({ data: "2026-11-09" })))).toEqual(["R3"]);
+    expect(regras(av(criado, pag({ data: "2027-03-01" })))).toEqual(["R3"]);
+  });
+  it("Vencimento ou Status preenchidos depois da criação (o webhook de criação chega antes) também disparam, com a mesma chave", () => {
+    expect(regras(av(coluna("Vencimento"), pag()))).toEqual(["R3"]);
+    expect(av(coluna("Status"), pag())[0].chave_dedupe).toBe(av(criado, pag())[0].chave_dedupe);
+  });
+  it("não: sem vencimento, criado há mais de 24h, aprovado, cancelado, valor ou observação mudaram, item do coletor", () => {
+    expect(av(criado, pag({ data: null }))).toEqual([]);
+    expect(av(criado, pag({ criadoEm: HORAS(25) }))).toEqual([]);
     expect(av(criado, pag({ categoria: "concluido" }))).toEqual([]);
     expect(av(criado, pag({ categoria: "cancelado" }))).toEqual([]);
-    expect(av(coluna("Status"), pag())).toEqual([]);
+    expect(av(coluna("Valor (R$)"), pag())).toEqual([]);
     expect(av(coluna("Observação"), pag())).toEqual([]);
     expect(av(criado, pag({ geradoPeloColetor: true }))).toEqual([]);
-  });
-  it("um por item + vencimento: mudar o vencimento gera nova chave", () => {
-    expect(av(coluna("Valor (R$)"), pag())[0].chave_dedupe).toBe(av(coluna("Vencimento"), pag())[0].chave_dedupe);
-    expect(av(coluna("Vencimento"), pag({ data: "2026-11-16" }))[0].chave_dedupe).toBe("R3:201:2026-11-16");
   });
 });
 
@@ -137,11 +144,11 @@ describe("R4: contrato", () => {
 });
 
 describe("nenhum texto leva valores", () => {
-  it("nomes e coordenações com valores são limpos e todo payload passa na trava", () => {
-    const sujo = { nome: "Aluguel R$ 120.000,00 sede", coordenacao: "Adm. 5.000,00" };
+  it("nomes com valores são limpos e todo payload passa na trava", () => {
+    const sujo = { nome: "Aluguel R$ 120.000,00 sede" };
     const ns = [
       ...av(criado, pag(sujo)),
-      ...av(coluna("Status"), pag({ ...sujo, categoria: "travado" })),
+      ...av(coluna("Status"), ativ({ ...sujo, categoria: "travado", data: "2026-12-30" })),
       ...av(criado, ativ({ nome: "Contrato de R$ 1.200,50 com fornecedor", tipo: "Contrato" })),
       ...av(criado, ativ({ nome: "Pagar 99,90 de taxa" })),
     ];
@@ -151,7 +158,7 @@ describe("nenhum texto leva valores", () => {
       expect(temValor(n.corpo)).toBe(false);
       expect(() => montarPayload({ titulo: n.titulo, corpo: n.corpo, tag: "t", url: n.url })).not.toThrow();
     }
-    expect(ns[0].corpo).toBe("Adm.: Aluguel sede");
+    expect(ns[0].corpo).toBe("Aluguel sede · vence 13/11");
     const g = agrupar(ns.map((n, k) => ({ ...n, id: String(k), criado_em: AGORA.toISOString() })));
     expect(temValor(g.titulo + g.corpo)).toBe(false);
     expect(temValor(textoResumo({ hoje: 3, atrasados: 2, noite: 4 }))).toBe(false);
@@ -383,28 +390,32 @@ describe("webhook: token, handshake e filtro", () => {
 });
 
 describe("aba Pagamentos oculta", () => {
-  it("nenhuma notificação de pagamento (R2/R3) e portanto nenhum link para /pagamentos", () => {
+  it("com a aba oculta a notificação de pagamento abre a tela Hoje ('/'), nunca /pagamentos", () => {
     expect(cfgOculta.abas.pagamentos).toBe(false);
-    expect(avaliarRegras(coluna("Status"), pag({ categoria: "travado" }), AGORA, cfgOculta)).toEqual([]);
-    expect(avaliarRegras(criado, pag(), AGORA, cfgOculta)).toEqual([]);
+    const [n] = avaliarRegras(criado, pag(), AGORA, cfgOculta);
+    expect(n).toMatchObject({ regra: "R3", prioridade: "imediata", titulo: "Aprovação pendente", url: "/" });
     expect(avaliarRegras(criado, ativ({ tipo: "Contrato" }), AGORA, cfgOculta)).toHaveLength(1); // atividades seguem
   });
-  it("a config valida abas e multiseguros", () => {
+  it("com a aba visível o link é /pagamentos", () => {
+    expect(av(criado, pag())[0].url.startsWith("/pagamentos")).toBe(true);
+  });
+  it("a config valida abas e pagamentos; a chave multiseguros não existe mais", () => {
     expect(() => validarConfig({ ...raw, abas: { pagamentos: "não" } })).toThrow(/abas\.pagamentos/);
-    expect(() => validarConfig({ ...raw, multiseguros: { importador_email: "x" } })).toThrow(/importador_email/);
+    expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: -1, aprovados_recentes_dias: 7 } })).toThrow(/aprovacao_diretor_a_partir_de/);
+    expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: 1, aprovados_recentes_dias: 0 } })).toThrow(/aprovados_recentes_dias/);
+    expect("multiseguros" in raw).toBe(false);
   });
 });
 
 describe("config e infraestrutura", () => {
   it("notificacoes é validada", () => {
-    expect(cfg.notificacoes).toEqual({ janela_inicio: "07:00", janela_fim: "20:00", agrupar_minutos: 15, pagamento_relevante: 100000, pagamento_antecedencia_dias: 7, novo_horas: 24 });
+    expect(cfg.notificacoes).toEqual({ janela_inicio: "07:00", janela_fim: "20:00", agrupar_minutos: 15, novo_horas: 24 });
     const com = (o: Record<string, unknown>) => () => validarConfig({ ...raw, notificacoes: { ...raw.notificacoes, ...o } });
     expect(com({ janela_inicio: "7h" })).toThrow(/janela_inicio/);
     expect(com({ janela_fim: "24:00" })).toThrow(/janela_fim/);
     expect(com({ janela_inicio: "21:00" })).toThrow(/antes de janela_fim/);
     expect(com({ agrupar_minutos: 0 })).toThrow(/agrupar_minutos/);
     expect(com({ novo_horas: 1.5 })).toThrow(/novo_horas/);
-    expect(com({ pagamento_relevante: -1 })).toThrow(/pagamento_relevante/);
   });
   it("migração: dedupe único, prioridade restrita, RLS sem nenhuma policy", () => {
     const sql = readFileSync(resolve(RAIZ, "supabase/migrations/20261113000000_notificacoes_fila.sql"), "utf8");

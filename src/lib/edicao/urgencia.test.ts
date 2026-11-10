@@ -80,7 +80,7 @@ describe("rotuloUrgencia: o texto que acompanha a cor", () => {
     expect(rotuloUrgencia(mk(null), HOJE, cfg)).toBe("Sem prazo");
     expect(rotuloUrgencia(mk("2026-11-25"), HOJE, cfg)).toBe("Em dia");
     expect(rotuloUrgencia(mk("2026-11-01", "concluido"), HOJE, cfg)).toBe("Concluído");
-    expect(rotuloUrgencia(mk("2026-11-01", "concluido", "pagamentos"), HOJE, cfg)).toBe("Pago");
+    expect(rotuloUrgencia(mk("2026-11-01", "concluido", "pagamentos"), HOJE, cfg)).toBe("Aprovado");
     expect(rotuloUrgencia(mk("2026-11-01", "cancelado"), HOJE, cfg)).toBeNull();
   });
 

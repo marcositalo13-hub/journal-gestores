@@ -1,10 +1,11 @@
 // Transforma a leitura dos quadros (ler.ts) em itens prontos para montar a edição.
 // Puro: sem rede. Nunca expõe URLs do monday.
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaArea, gestorDaCoordenacao, type JornalConfig, type TipoQuadro } from "../config";
+import { getConfig, gestorDaArea, type JornalConfig, type TipoQuadro } from "../config";
 import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo } from "../rotulos";
 import { areaDaColuna, ehRegraSemData, type ItemNormalizado, type QuadroLido } from "../coletor/ler";
+import { motivoAprovacao } from "./pagamentos";
 import type { MotivoSemPrazo } from "../sem-prazo";
 
 export type TipoItem = "Atividade" | "Entrega" | "Contrato" | "Pagamento";
@@ -25,8 +26,8 @@ export interface ItemJornal {
   status: string | null;
   categoria: Categoria;
   valor?: number;
-  favorecido?: string;
-  coordenacao?: string;
+  /** só pagamentos: por que o diretor aprova ("Acima de R$ 100 mil" | "Área subordinada"); ausente se o item não tem valor */
+  motivoAprovacao?: string;
   observacao?: string;
   recorrencia?: string;
   chave?: string;
@@ -55,9 +56,9 @@ export function categoriaDoStatus(status: string | null, tipo: TipoQuadro, cfg: 
   const t = cfg.tipos_de_quadro[tipo];
   const s = (status ?? "").trim();
   if (mesmoRotulo(s, t.status_concluido)) return "concluido";
-  if (mesmoRotulo(s, t.status_travado)) return "travado";
+  if (t.status_travado && mesmoRotulo(s, t.status_travado)) return "travado";
   if (mesmoRotulo(s, t.status_cancelado)) return "cancelado";
-  return "aberto"; // Previsto / Não iniciado / Em andamento / sem status
+  return "aberto"; // Aguardando aprovação / Não iniciado / Em andamento / sem status
 }
 
 function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro): TipoItem {
@@ -73,27 +74,22 @@ export const SEM_AREA = "Sem área";
  * O item entra na edição?
  * por_mes: ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro.
  * por_area: ocorrências e únicos dos grupos de área e de finalizadas (regras nunca).
+ * lista (Pagamentos): tudo o que ainda não foi para o grupo de finalizados.
  */
 function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
+  if (it.lista) return !it.lista.finalizada;
   if (it.porArea) return it.porArea.classe !== "regra" && (it.porArea.areaGrupo !== null || it.porArea.finalizada);
   if (it.noCadastro) return parseFrequencia(it.recorrencia) === "nao_recorrente"; // regras recorrentes já têm ocorrências
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
 }
 
-/** Rótulos da coluna Coordenação (dropdown), com fallback para o texto. */
-export function rotulosDaCoordenacao(v: { labels: string[] | null; text: string } | null | undefined): string[] {
-  if (!v) return [];
-  return v.labels?.length ? v.labels : v.text ? v.text.split(",").map((x) => x.trim()).filter(Boolean) : [];
-}
-
 /**
  * Quem responde. por_area: o gestor da coluna Área; vazia, o da área do grupo; senão "Sem área".
- * Pagamentos: o gestor da coordenação; sem coordenação (ou desconhecida), o dono do quadro.
+ * Pagamentos: o próprio diretor (aprova os pagamentos; nunca é um gestor e não entra nas contagens deles).
  */
 export function donoDoItem(it: ItemNormalizado, q: Pick<QuadroLido, "tipo" | "dono">, cfg: JornalConfig = getConfig()): string {
   if (it.porArea) return gestorDaArea(areaDaColuna(it, cfg), cfg) ?? gestorDaArea(it.porArea.areaGrupo, cfg) ?? SEM_AREA;
-  if (q.tipo !== "pagamentos") return q.dono;
-  return gestorDaCoordenacao(rotulosDaCoordenacao(it.valores["Coordenação"]), cfg) ?? q.dono;
+  return q.tipo === "pagamentos" ? cfg.diretor : q.dono;
 }
 
 const txt = (v: string | null | undefined) => (v && v.trim() ? v.trim() : undefined);
@@ -114,7 +110,6 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
       const regraSemData = ehRegraSemData(it); // regras com data nunca entram; sem data, aparecem em "Sem prazo"
       if (!entra(it, cfg) && !regraSemData) continue;
       const valor = it.valores["Valor (R$)"]?.number;
-      const coordenacao = it.valores["Coordenação"]?.labels?.join(", ") || it.valores["Coordenação"]?.text;
       const base = {
         id: it.id,
         nome: it.nome,
@@ -125,8 +120,7 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         status: it.status,
         categoria: categoriaDoStatus(it.status, q.tipo, cfg),
         ...(typeof valor === "number" ? { valor } : {}),
-        ...(txt(it.valores["Favorecido"]?.text) ? { favorecido: txt(it.valores["Favorecido"]?.text) } : {}),
-        ...(txt(coordenacao) ? { coordenacao: txt(coordenacao) } : {}),
+        ...(q.tipo === "pagamentos" && typeof valor === "number" ? { motivoAprovacao: motivoAprovacao(valor, cfg) } : {}),
         ...(txt(it.valores[tcfg.campo_motivo]?.text) ? { observacao: txt(it.valores[tcfg.campo_motivo]?.text) } : {}),
         ...(txt(it.recorrencia) ? { recorrencia: txt(it.recorrencia) } : {}),
         ...(txt(it.chave) ? { chave: txt(it.chave) } : {}),

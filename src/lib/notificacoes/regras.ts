@@ -1,6 +1,7 @@
 // Regras de notificação R1–R4. Puro: tudo entra por argumento (item relido do monday, evento, agora, config).
-// Nenhum texto leva valores monetários: os nomes passam por limparValores e o payload ainda recusa valores.
-import { diasEntre, diaDaSemana, hoje as hojeSP, somarDias, type DataISO } from "../calendario";
+// Nenhum texto leva valores monetários: o item das regras nem carrega o valor, os nomes passam por limparValores
+// e o payload ainda recusa qualquer texto com valor.
+import { diasEntre, diaDaSemana, hoje as hojeSP, type DataISO } from "../calendario";
 import { areaCurta, type JornalConfig } from "../config";
 import type { Categoria, TipoItem } from "../edicao/itens";
 import { limparValores } from "../push/payload";
@@ -27,8 +28,6 @@ export interface ItemParaRegras {
   /** está no grupo "Atividades finalizadas" */
   finalizada: boolean;
   dono: string;
-  coordenacao?: string;
-  valor?: number;
 }
 
 export interface NotificacaoFila {
@@ -56,6 +55,8 @@ export function diaEData(d: DataISO): string {
 const aberto = (c: Categoria) => c === "aberto" || c === "travado";
 const prefixoArea = (i: ItemParaRegras, cfg: JornalConfig) => areaCurta(i.dono, cfg) ?? i.dono;
 const urlDoItem = (id: string) => `/?item=${id}`;
+/** Pagamentos vivem na aba deles; com a aba oculta, a notificação abre a tela Hoje (nunca /pagamentos). */
+const urlDoPagamento = (id: string, cfg: JornalConfig) => (cfg.abas.pagamentos ? `/pagamentos?item=${id}` : "/");
 
 /** Criado há no máximo `novo_horas` (e não no futuro, por segurança contra relógios). */
 export function ehNovo(criadoEm: string, agora: Date, cfg: JornalConfig): boolean {
@@ -65,16 +66,20 @@ export function ehNovo(criadoEm: string, agora: Date, cfg: JornalConfig): boolea
   return idade >= -5 * 60_000 && idade <= cfg.notificacoes.novo_horas * 3_600_000;
 }
 
-/** Quais regras um evento pode disparar. Criação: todas; colunas: só a(s) regra(s) daquela coluna. */
+/**
+ * Quais regras um evento pode disparar. Criação: todas; colunas: só a(s) regra(s) daquela coluna.
+ * Pagamentos: R3 também quando Vencimento ou Status mudam (o webhook de criação pode chegar antes de o
+ * colaborador preencher o vencimento); a chave de dedupe garante um único aviso por pagamento.
+ */
 function regrasDoEvento(e: EventoItem, i: ItemParaRegras, cfg: JornalConfig): Set<Regra> {
   if (e.tipo === "criado") return new Set(["R1", "R2", "R3", "R4"]);
   const t = cfg.tipos_de_quadro[i.tipoQuadro];
   const out = new Set<Regra>();
-  if (e.titulo === t.status) out.add("R2");
   if (i.tipoQuadro === "atividades") {
+    if (e.titulo === t.status) out.add("R2");
     if (e.titulo === t.data) out.add("R1");
     if (e.titulo === "Tipo") out.add("R4");
-  } else if (e.titulo === t.data || e.titulo === "Valor (R$)") out.add("R3");
+  } else if (e.titulo === t.data || e.titulo === t.status) out.add("R3");
   return out;
 }
 
@@ -84,7 +89,6 @@ function regrasDoEvento(e: EventoItem, i: ItemParaRegras, cfg: JornalConfig): Se
  */
 export function avaliarRegras(evento: EventoItem, i: ItemParaRegras, agora: Date, cfg: JornalConfig): NotificacaoFila[] {
   if (evento.tipo === "criado" && i.geradoPeloColetor) return [];
-  if (i.tipoQuadro === "pagamentos" && !cfg.abas.pagamentos) return []; // aba oculta: nunca notificar nem linkar para /pagamentos
   const possiveis = regrasDoEvento(evento, i, cfg);
   const hoje = hojeSP(agora, cfg);
   const nome = limparValores(i.nome);
@@ -113,29 +117,22 @@ export function avaliarRegras(evento: EventoItem, i: ItemParaRegras, agora: Date
     }
   }
 
-  // R2: virou Travado (atividades ou pagamentos). No máximo uma vez por item por dia.
+  // R2: virou Travado (só atividades; pagamentos não têm esse status). No máximo uma vez por item por dia.
   if (possiveis.has("R2") && !i.finalizada && i.categoria === "travado") {
     add({ chave_dedupe: `R2:${i.id}:${hoje}`, regra: "R2", prioridade: "normal", titulo: "Travado", corpo: `${prefixoArea(i, cfg)}: ${nome}` });
   }
 
-  // R3: pagamento relevante vencendo em breve, criado ou alterado. Uma vez por item + vencimento.
-  const n = cfg.notificacoes;
-  if (
-    possiveis.has("R3") &&
-    !ativ &&
-    aberto(i.categoria) &&
-    typeof i.valor === "number" &&
-    i.valor >= n.pagamento_relevante &&
-    i.data &&
-    i.data >= hoje &&
-    i.data <= somarDias(hoje, n.pagamento_antecedencia_dias)
-  ) {
-    add({
-      chave_dedupe: `R3:${i.id}:${i.data}`,
+  // R3: pagamento novo aguardando a aprovação do diretor (com vencimento). Imediata; uma vez por pagamento.
+  // Nunca leva o valor: só o nome (sem valores) e o vencimento.
+  if (possiveis.has("R3") && !ativ && i.categoria === "aberto" && i.data && ehNovo(i.criadoEm, agora, cfg)) {
+    out.push({
+      chave_dedupe: `R3:${i.id}`,
       regra: "R3",
-      prioridade: "normal",
-      titulo: `Pagamento ${diaEData(i.data)}`,
-      corpo: `${limparValores(i.coordenacao ?? prefixoArea(i, cfg))}: ${nome}`,
+      prioridade: "imediata",
+      titulo: "Aprovação pendente",
+      corpo: `${nome} · vence ${ddmm(i.data)}`,
+      item_id: i.id,
+      url: urlDoPagamento(i.id, cfg),
     });
   }
   return out;

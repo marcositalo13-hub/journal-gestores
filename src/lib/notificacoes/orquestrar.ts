@@ -36,7 +36,7 @@ export interface DepsNotificacoes {
 /** Colunas que interessam por tipo de quadro; Área, Chave, Observação, Mês etc. são ignoradas. */
 export function colunasRelevantes(tipo: "atividades" | "pagamentos", cfg: JornalConfig): string[] {
   const t = cfg.tipos_de_quadro[tipo];
-  return tipo === "atividades" ? [t.data, t.status, "Tipo"] : [t.data, t.status, "Valor (R$)"];
+  return tipo === "atividades" ? [t.data, t.status, "Tipo"] : [t.data, t.status];
 }
 
 async function enviar(envios: Envio[], deps: DepsNotificacoes) {

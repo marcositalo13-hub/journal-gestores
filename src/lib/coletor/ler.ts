@@ -1,5 +1,5 @@
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaArea, gestorDaCoordenacao, type JornalConfig, type LayoutQuadro, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
+import { getConfig, gestorDaArea, grupoFinalizadasDoQuadro, type JornalConfig, type LayoutQuadro, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
 import { mondayQuery } from "../monday/client";
 import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo, parseRotulosDaColuna, resolverRotulo, type RotuloColuna } from "../rotulos";
@@ -65,7 +65,6 @@ export interface Aviso {
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
     | "prazo_movido_para_subitens"
-    | "pagamento_sem_coordenacao"
     | "recorrencia_desconhecida"
     | "chave_duplicada"
     | "grupo_desconhecido"
@@ -105,6 +104,11 @@ export interface DadosPorArea {
   finalizada: boolean;
 }
 
+/** Quadros "lista" (Pagamentos): o item está no grupo de finalizados? */
+export interface DadosLista {
+  finalizada: boolean;
+}
+
 export interface ItemNormalizado {
   id: string;
   nome: string;
@@ -127,6 +131,8 @@ export interface ItemNormalizado {
   datasSubitens: string[];
   /** presente só em quadros por_area */
   porArea?: DadosPorArea;
+  /** presente só em quadros lista */
+  lista?: DadosLista;
 }
 
 export interface QuadroLido {
@@ -136,6 +142,8 @@ export interface QuadroLido {
   layout: LayoutQuadro;
   dono: string;
   hierarchyType: string | null;
+  /** grupo de itens finalizados deste quadro (por_area e lista) */
+  grupoFinalizadas: string;
   /** grupos na ordem do quadro (por position) */
   grupos: { id: string; titulo: string }[];
   /** colunas mapeadas por título (null se ausente) */
@@ -255,15 +263,18 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
   };
   exigeRotulo(tipoCfg.status, tipoCfg.status_inicial);
   const porArea = qc.layout === "por_area";
+  const porMes = qc.layout === "por_mes";
+  const lista = qc.layout === "lista";
+  const grupoFinalizadas = grupoFinalizadasDoQuadro(qc, cfg);
   if (porArea) {
     exigeRotulo(tipoCfg.status, tipoCfg.status_regra);
     for (const g of cfg.gestores) exigeRotulo("Área", g.area);
   }
-  if (!porArea && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_cadastro)) {
+  if (porMes && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_cadastro)) {
     av({ codigo: "grupo_cadastro_ausente", mensagem: `Grupo "${cfg.grupo_cadastro}" não existe no quadro.` });
   }
-  if (porArea && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_finalizadas)) {
-    av({ codigo: "grupo_finalizadas_ausente", mensagem: `Grupo "${cfg.grupo_finalizadas}" não existe no quadro; nada será finalizado.` });
+  if ((porArea || lista) && !quadro.groups.some((g) => g.title.trim() === grupoFinalizadas)) {
+    av({ codigo: "grupo_finalizadas_ausente", mensagem: `Grupo "${grupoFinalizadas}" não existe no quadro; nada será finalizado.` });
   }
 
   const itens: ItemNormalizado[] = itensApi.map((it) => {
@@ -282,7 +293,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       updatedAt: it.updated_at,
       createdAt: it.created_at ?? it.updated_at,
       grupo,
-      noCadastro: !porArea && grupo.titulo === cfg.grupo_cadastro,
+      noCadastro: porMes && grupo.titulo === cfg.grupo_cadastro,
       valores,
       data: valores[tipoCfg.data]?.date ?? null,
       status: valores[tipoCfg.status]?.label ?? null,
@@ -300,6 +311,8 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       };
     }
 
+    if (lista) n.lista = { finalizada: grupo.titulo === grupoFinalizadas };
+
     const ctx = { itemId: n.id, itemNome: n.nome };
     for (const ob of tipoCfg.obrigatorias) {
       // coluna ausente já foi reportada no nível do quadro
@@ -307,24 +320,11 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
         av({ ...ctx, codigo: "obrigatoria_vazia", mensagem: `"${n.nome}": campo obrigatório "${ob}" vazio.` });
       }
     }
-    if (mesmoRotulo(n.status, tipoCfg.status_travado) && vazio(n.motivo)) {
+    if (tipoCfg.status_travado && mesmoRotulo(n.status, tipoCfg.status_travado) && vazio(n.motivo)) {
       av({ ...ctx, codigo: "travado_sem_motivo", mensagem: `"${n.nome}": status "${tipoCfg.status_travado}" sem motivo em "${tipoCfg.campo_motivo}".` });
     }
     if (n.noCadastro && idPorTitulo["Recorrência"] && vazio(n.recorrencia)) {
       av({ ...ctx, codigo: "cadastro_sem_recorrencia", mensagem: `"${n.nome}": item do Cadastro sem "Recorrência".` });
-    }
-    if (qc.tipo === "pagamentos" && idPorTitulo["Coordenação"]) {
-      const v = valores["Coordenação"];
-      const rotulos = v?.labels?.length ? v.labels : v?.text ? v.text.split(",").map((x) => x.trim()).filter(Boolean) : [];
-      if (!gestorDaCoordenacao(rotulos, cfg)) {
-        av({
-          ...ctx,
-          codigo: "pagamento_sem_coordenacao",
-          mensagem: rotulos.length
-            ? `"${n.nome}": coordenação "${rotulos.join(", ")}" não está em config.coordenacoes; o item ficará com o dono do quadro (${qc.dono}).`
-            : `"${n.nome}": pagamento sem coordenação; o item ficará com o dono do quadro (${qc.dono}).`,
-        });
-      }
     }
     if (
       ehRegraSemData(n) &&
@@ -360,6 +360,8 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       if (t !== cfg.grupo_finalizadas && !gestorDaArea(t, cfg)) {
         av({ codigo: "grupo_desconhecido", mensagem: `Grupo "${t}" não é uma área do config nem "${cfg.grupo_finalizadas}"; seus itens são ignorados.` });
       }
+    } else if (lista) {
+      // lista: todo grupo vale (o de entrada e o de finalizados); nada a avisar
     } else if (t !== cfg.grupo_cadastro && !parseGrupoMes(t, cfg) && comItens.has(t)) {
       av({ codigo: "grupo_desconhecido", mensagem: `Grupo "${t}" não é "${cfg.grupo_cadastro}" nem um mês válido, mas tem itens.` });
     }
@@ -372,6 +374,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     layout: qc.layout,
     dono: qc.dono,
     hierarchyType: quadro.hierarchy_type,
+    grupoFinalizadas,
     grupos: ordenarPorPosicao(quadro.groups).map((g) => ({ id: g.id, titulo: g.title.trim() })),
     colunas,
     itens,
@@ -392,6 +395,11 @@ export function classificarItem(recorrencia: string | null, chave: string | null
  */
 export function ehRegraSemData(it: Pick<ItemNormalizado, "porArea" | "data" | "datasSubitens">): boolean {
   return it.porArea?.classe === "regra" && it.porArea.areaGrupo !== null && !it.porArea.finalizada && !it.data && it.datasSubitens.length === 0;
+}
+
+/** O item está no grupo de finalizados (por_area ou lista)? */
+export function estaFinalizado(it: Pick<ItemNormalizado, "porArea" | "lista">): boolean {
+  return !!(it.porArea?.finalizada || it.lista?.finalizada);
 }
 
 /** Área preenchida na coluna Área (primeiro rótulo que é uma área do config), ou null. */
@@ -468,6 +476,7 @@ export async function lerQuadros(cfg: JornalConfig = getConfig()): Promise<Quadr
         layout: qc.layout,
         dono: qc.dono,
         hierarchyType: null,
+        grupoFinalizadas: grupoFinalizadasDoQuadro(qc, cfg),
         grupos: [],
         colunas: {},
         itens: [],

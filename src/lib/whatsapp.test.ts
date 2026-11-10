@@ -15,11 +15,6 @@ describe("mensagemItem", () => {
       'Olá, Lucas. Sobre "Entrega do plano" (prazo 17/10): qual é a situação?',
     );
   });
-  it("pagamento: 'Sobre o pagamento \"x\" de dd/mm'", () => {
-    expect(mensagemItem({ nome: "Aluguel da sede", tipo: "Pagamento", data: "2026-10-09" }, "Keite")).toBe(
-      'Olá, Keite. Sobre o pagamento "Aluguel da sede" de 09/10: qual é a situação?',
-    );
-  });
   it("item sem prazo: pergunta o prazo (qualquer tipo)", () => {
     expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
     expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null, motivo: "sem_prazo" }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');

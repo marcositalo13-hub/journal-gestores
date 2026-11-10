@@ -64,8 +64,10 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const simulada = dataDeTeste(params.data, process.env.NODE_ENV);
   // ?item=ID: aberto por uma notificação. Pagamentos abrem na aba deles.
-  const itemAberto = await itemDaUrl(params.item);
-  if (itemAberto?.tipoQuadro === "pagamentos" && getConfig().abas.pagamentos) redirect(`/pagamentos?item=${itemAberto.id}`);
+  const itemDaNotificacao = await itemDaUrl(params.item);
+  if (itemDaNotificacao?.tipoQuadro === "pagamentos" && getConfig().abas.pagamentos) redirect(`/pagamentos?item=${itemDaNotificacao.id}`);
+  // aba oculta: um pagamento nunca abre na tela Hoje
+  const itemAberto = itemDaNotificacao?.tipoQuadro === "pagamentos" ? null : itemDaNotificacao;
 
   const resultado = await (simulada ? obterEdicaoEm(simulada) : obterEdicao()).then(
     (edicao) => ({ edicao }),

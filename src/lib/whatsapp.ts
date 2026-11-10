@@ -26,11 +26,6 @@ export function mensagemItem(item: ItemParaMensagem, primeiro: string): string {
       ? `Olá, ${primeiro}. Qual é a data da primeira entrega de "${item.nome}"? Sem ela, a recorrência não aparece no painel.`
       : `Olá, ${primeiro}. Qual é o prazo de "${item.nome}"?`;
   }
-  if (item.tipo === "Pagamento") {
-    return item.data
-      ? `Olá, ${primeiro}. Sobre o pagamento "${item.nome}" de ${ddmm(item.data)}: qual é a situação?`
-      : `Olá, ${primeiro}. Sobre o pagamento "${item.nome}": qual é a situação?`;
-  }
   return item.data
     ? `Olá, ${primeiro}. Sobre "${item.nome}" (prazo ${ddmm(item.data)}): qual é a situação?`
     : `Olá, ${primeiro}. Sobre "${item.nome}": qual é a situação?`;

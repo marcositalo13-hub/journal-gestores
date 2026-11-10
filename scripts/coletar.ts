@@ -24,6 +24,19 @@ function imprimirPlanoArea(q: QuadroLido, p: PlanoQuadro, avisos: Aviso[]) {
   }
 }
 
+function imprimirPlanoLista(q: QuadroLido, p: PlanoQuadro, avisos: Aviso[]) {
+  const fin = q.itens.filter((i) => i.lista?.finalizada).length;
+  console.log(`
+■ ${q.nome} (${q.id}) · ${q.tipo} · lista · ${q.hierarchyType ?? "?"}`);
+  console.log(
+    `  itens ${q.itens.length} (em "${q.grupoFinalizadas}" ${fin}) · grupos ${q.grupos.map((g) => g.titulo).join(" › ")}
+` +
+      `  seria_finalizado ${p.acoesArea.length} · avisos ${avisos.length}`,
+  );
+  for (const a of avisos) console.log(`  ⚠ [${a.codigo}] ${a.mensagem}`);
+  for (const a of p.acoesArea) if (a.tipo === "seria_finalizado") console.log(`  • seria_finalizado ${a.itemNome} · ${a.status} em ${a.data} → ${a.grupo.titulo}`);
+}
+
 function imprimirPlano(quadros: QuadroLido[], planos: PlanoQuadro[]) {
   for (const [i, q] of quadros.entries()) {
     const p = planos[i];
@@ -31,6 +44,10 @@ function imprimirPlano(quadros: QuadroLido[], planos: PlanoQuadro[]) {
     const cont = (t: string) => p.acoes.filter((a) => a.tipo === t).length;
     if (q.layout === "por_area") {
       imprimirPlanoArea(q, p, avisos);
+      continue;
+    }
+    if (q.layout === "lista") {
+      imprimirPlanoLista(q, p, avisos);
       continue;
     }
     console.log(`\n■ ${q.nome} (${q.id}) · ${q.tipo} · dono ${q.dono} · ${q.hierarchyType ?? "?"}`);

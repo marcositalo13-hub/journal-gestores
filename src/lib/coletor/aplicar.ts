@@ -1,6 +1,7 @@
 // Executa um PlanoQuadro no monday.
 // por_mes: cria grupos de mês, cria ocorrências e move itens avulsos (sem alterar colunas de itens existentes).
 // por_area: preenche Área, rotula regras, cria ocorrências e move encerrados. Nunca apaga nada.
+// lista: só move encerrados para o grupo de finalizados.
 import { ddmm, nomeDiaDaSemana, parseGrupoMes } from "../calendario";
 import { getConfig, type JornalConfig, type TipoQuadro } from "../config";
 import { mondayMutation, mondayQuery } from "../monday/client";
@@ -284,7 +285,7 @@ export async function aplicarPlano(q: QuadroLido, plano: PlanoQuadro, cfg: Jorna
     regrasRotuladas: [],
     falhas: [],
   };
-  if (q.layout === "por_area") return aplicarPlanoArea(q, plano, rel, cfg);
+  if (q.layout !== "por_mes") return aplicarPlanoArea(q, plano, rel, cfg); // por_area e lista (esta só tem "finalizado")
 
   const grupos = [...q.grupos];
   const idDoGrupo = (titulo: string) => grupos.find((g) => g.titulo === titulo)?.id;

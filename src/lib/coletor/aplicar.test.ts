@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { parseGrupoMes } from "../calendario";
 import { montarOcorrencia } from "../recorrencia";
 import { grupoAnteriorPara, montarColumnValues, ordenarGruposMes } from "./aplicar";
+import { cfgPorMes } from "./config-por-mes";
 import { detectarChavesDuplicadas, ordenarPorPosicao, type ColunaMapeada, type Valor } from "./ler";
 
 const val = (p: Partial<Valor>): Valor => ({ text: "", label: null, date: null, number: null, labels: null, ...p });
 
-describe("montarColumnValues — pagamentos", () => {
+describe("montarColumnValues — por_mes (config de teste)", () => {
   const colunas: Record<string, ColunaMapeada> = {
     Favorecido: { id: "fav", type: "text" },
     "Valor (R$)": { id: "val", type: "numbers" },
@@ -32,7 +33,7 @@ describe("montarColumnValues — pagamentos", () => {
 
   it("com ajuste de data: efetiva + observação; não copia Status/Chave/data/Observação da regra", () => {
     const oc = montarOcorrencia("13210563084", "2026-10-10", "dia_util_mais_proximo");
-    expect(montarColumnValues(regra, oc, "pagamentos", colunas)).toEqual({
+    expect(montarColumnValues(regra, oc, "pagamentos", colunas, cfgPorMes)).toEqual({
       fav: "Imobiliária X",
       val: "12500.5",
       rec: { ids: [4] },
@@ -45,14 +46,14 @@ describe("montarColumnValues — pagamentos", () => {
 
   it("sem ajuste: Observação fica vazia (não enviada)", () => {
     const oc = montarOcorrencia("13210563084", "2026-11-10", "dia_util_mais_proximo");
-    const cv = montarColumnValues(regra, oc, "pagamentos", colunas);
+    const cv = montarColumnValues(regra, oc, "pagamentos", colunas, cfgPorMes);
     expect(cv.obs).toBeUndefined();
     expect(cv.venc).toEqual({ date: "2026-11-10" });
   });
 
   it("coluna ausente no quadro é ignorada", () => {
     const oc = montarOcorrencia("1", "2026-11-10", "dia_util_mais_proximo");
-    const cv = montarColumnValues(regra, oc, "pagamentos", { ...colunas, Favorecido: null } as Record<string, ColunaMapeada | null>);
+    const cv = montarColumnValues(regra, oc, "pagamentos", { ...colunas, Favorecido: null } as Record<string, ColunaMapeada | null>, cfgPorMes);
     expect(cv.fav).toBeUndefined();
   });
 });

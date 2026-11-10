@@ -1,58 +1,46 @@
 // Dados de exemplo da aba Pagamentos (só em desenvolvimento: ?fixture=pagamentos). Nunca vai para produção.
-import { formatar, partes, somarDias, somarMeses, type DataISO } from "../calendario";
-import type { Categoria, ItemJornal } from "./itens";
+import { somarDias, type DataISO } from "../calendario";
+import { getConfig } from "../config";
+import type { Categoria, ItemEdicao, ItemJornal } from "./itens";
+import { motivoAprovacao } from "./pagamentos";
 
 let n = 0;
-function pag(o: { nome: string; valor: number; data: DataISO; dono: string; coordenacao: string; categoria?: Categoria; status?: string; observacao?: string; favorecido?: string }): ItemJornal {
+function pag(o: { nome: string; valor: number; data: DataISO | null; categoria?: Categoria; atualizadoHaDias?: number; observacao?: string }, hoje: DataISO): ItemEdicao {
   n++;
   const categoria = o.categoria ?? "aberto";
-  return {
+  const status = categoria === "concluido" ? "Aprovado" : categoria === "cancelado" ? "Cancelado" : "Aguardando aprovação";
+  const base = {
     id: `fx-pag-${n}`,
     nome: `[EXEMPLO] ${o.nome}`,
     quadroId: "fixture",
-    tipoQuadro: "pagamentos",
-    dono: o.dono,
-    tipo: "Pagamento",
-    data: o.data,
-    status: o.status ?? (categoria === "concluido" ? "Pago" : categoria === "travado" ? "Travado" : categoria === "cancelado" ? "Cancelado" : "Previsto"),
+    tipoQuadro: "pagamentos" as const,
+    dono: getConfig().diretor,
+    tipo: "Pagamento" as const,
+    status,
     categoria,
     valor: o.valor,
-    favorecido: o.favorecido ?? "Fornecedor Exemplo",
-    coordenacao: o.coordenacao,
+    motivoAprovacao: motivoAprovacao(o.valor, getConfig()),
     ...(o.observacao ? { observacao: o.observacao } : {}),
-    updatedAt: "2026-01-01T00:00:00Z",
+    updatedAt: `${somarDias(hoje, -(o.atualizadoHaDias ?? 30))}T15:00:00Z`,
   };
+  return o.data ? ({ ...base, data: o.data } satisfies ItemJornal) : { ...base, data: null, motivo: "sem_prazo" };
 }
 
-const KEITE = { dono: "Keite Martins", coordenacao: "Adm. e Financeira" };
-const JOAO = { dono: "João Silva", coordenacao: "Controladoria" };
-const GRAZI = { dono: "Graziely Palma", coordenacao: "Contábil e Fiscal" };
-const SOLANGE = { dono: "Solange Mata", coordenacao: "Superintendência" };
-
-/** Cenário relativo a `hoje`: atrasados, pago, travado, cancelado, vários dias de saída e o mês seguinte. */
-export function fixturePagamentos(hoje: DataISO): ItemJornal[] {
+/** Cenário relativo a `hoje`: vencidos, vencendo hoje/amanhã, mais adiante, sem vencimento, aprovados e cancelado. */
+export function fixturePagamentos(hoje: DataISO): ItemEdicao[] {
   n = 0;
-  const [ano, mes] = partes(hoje);
-  const [anoProx, mesProx] = somarMeses(ano, mes, 1);
-  const noMes = (dia: number) => formatar(ano, mes, dia);
-  const noProx = (dia: number) => formatar(anoProx, mesProx, dia);
   const d = (k: number) => somarDias(hoje, k);
   return [
-    pag({ nome: "Aluguel da sede (atrasado)", valor: 80000, data: d(-9), ...KEITE }),
-    pag({ nome: "Multa contratual (atrasada)", valor: 15000, data: d(-3), ...JOAO }),
-    pag({ nome: "Energia elétrica (paga)", valor: 18400.5, data: noMes(2), ...KEITE, categoria: "concluido" }),
-    pag({ nome: "Honorários contábeis (pago)", valor: 32000, data: noMes(3), ...GRAZI, categoria: "concluido" }),
-    pag({ nome: "Licenças de software", valor: 120000, data: d(2), ...SOLANGE }),
-    pag({ nome: "Seguro predial", valor: 12500, data: d(5), ...KEITE }),
-    pag({ nome: "Auditoria externa", valor: 22000, data: d(5), ...JOAO }),
-    pag({ nome: "Manutenção do elevador", valor: 6800, data: d(12), ...KEITE }),
-    pag({ nome: "Parcela do convênio", valor: 45000, data: d(20), ...GRAZI }),
-    pag({ nome: "Reforma do 3º andar", valor: 300000, data: d(33), ...SOLANGE }),
-    pag({ nome: "Consultoria tributária", valor: 9500, data: d(44), ...GRAZI }),
-    pag({ nome: "Fornecedor de limpeza", valor: 14200, data: d(7), ...KEITE, categoria: "travado", observacao: "Aguardando nota fiscal do fornecedor" }),
-    pag({ nome: "Pagamento duplicado (cancelado)", valor: 999999, data: d(3), ...KEITE, categoria: "cancelado" }),
-    pag({ nome: "Fora da janela de 45 dias", valor: 50000, data: d(60), ...JOAO }),
-    pag({ nome: "Aluguel da sede (próximo mês)", valor: 80000, data: noProx(10), ...KEITE }),
-    pag({ nome: "Honorários (próximo mês)", valor: 32000, data: noProx(5), ...GRAZI, categoria: "concluido" }),
+    pag({ nome: "Aluguel da sede (vencido)", valor: 80000, data: d(-9) }, hoje),
+    pag({ nome: "Multa contratual (vencida)", valor: 15000, data: d(-1) }, hoje),
+    pag({ nome: "Licenças de software", valor: 120000, data: d(0) }, hoje),
+    pag({ nome: "Seguro predial", valor: 12500, data: d(1) }, hoje),
+    pag({ nome: "Auditoria externa", valor: 99999.99, data: d(5) }, hoje),
+    pag({ nome: "Reforma do 3º andar", valor: 300000, data: d(33) }, hoje),
+    pag({ nome: "Fornecedor sem vencimento", valor: 9500, data: null }, hoje),
+    pag({ nome: "Energia elétrica (aprovada)", valor: 18400.5, data: d(2), categoria: "concluido", atualizadoHaDias: 1 }, hoje),
+    pag({ nome: "Honorários contábeis (aprovados)", valor: 132000, data: d(-3), categoria: "concluido", atualizadoHaDias: 6 }, hoje),
+    pag({ nome: "Aprovado há muito tempo", valor: 40000, data: d(-40), categoria: "concluido", atualizadoHaDias: 40 }, hoje),
+    pag({ nome: "Pagamento duplicado (cancelado)", valor: 999999, data: d(3), categoria: "cancelado", atualizadoHaDias: 1 }, hoje),
   ];
 }

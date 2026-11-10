@@ -54,7 +54,9 @@ function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 }
 
 function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao | null; aberto: boolean; onAberto: (v: boolean) => void; gestores: DiretorioGestores }) {
-  const gestor = item ? gestores[item.dono] : undefined;
+  const pagamento = item?.tipoQuadro === "pagamentos";
+  // pagamento é do diretor: sem gestor, sem WhatsApp
+  const gestor = item && !pagamento ? gestores[item.dono] : undefined;
   return (
     <Drawer open={aberto} onOpenChange={onAberto}>
       <DrawerContent>
@@ -63,9 +65,7 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
             <DrawerHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="rotulo-tipo">
-                    {item.tipo} · {item.dono}
-                  </p>
+                  <p className="rotulo-tipo">{pagamento ? "Pagamento para aprovação" : `${item.tipo} · ${item.dono}`}</p>
                   <DrawerTitle className="titulo-jornal mt-1.5 text-[1.625rem] leading-[1.15]">{item.nome}</DrawerTitle>
                 </div>
                 <DrawerClose asChild>
@@ -89,19 +89,21 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
               </div>
             )}
 
-            {item.data === null && <p className="px-5 pb-3 text-[0.9375rem] font-semibold leading-snug text-nivel-amarelo-texto">{textoSemPrazo(item.motivo)}</p>}
+            {item.data === null && !pagamento && <p className="px-5 pb-3 text-[0.9375rem] font-semibold leading-snug text-nivel-amarelo-texto">{textoSemPrazo(item.motivo)}</p>}
 
             <dl className="overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
-              <Campo rotulo={"dataHerdada" in item && item.dataHerdada ? "Prazo da última etapa" : "Prazo"}>
-                {item.data ? dataCurta(item.data) : <span className="text-alerta">Sem prazo definido</span>}
+              <Campo rotulo={pagamento ? "Vencimento" : "dataHerdada" in item && item.dataHerdada ? "Prazo da última etapa" : "Prazo"}>
+                {item.data ? dataCurta(item.data) : <span className="text-alerta">{pagamento ? "Sem vencimento definido" : "Sem prazo definido"}</span>}
               </Campo>
               <Campo rotulo="Status">
                 <PillStatus categoria={item.categoria} status={item.status} />
               </Campo>
-              <Campo rotulo="Responde">
-                {item.dono}
-                {gestor?.area && <span className="text-tinta-2"> ({gestor.area})</span>}
-              </Campo>
+              {!pagamento && (
+                <Campo rotulo="Responde">
+                  {item.dono}
+                  {gestor?.area && <span className="text-tinta-2"> ({gestor.area})</span>}
+                </Campo>
+              )}
               {item.observacao && <Campo rotulo="Observação">{item.observacao}</Campo>}
               {item.recorrencia && <Campo rotulo="Recorrência">{item.recorrencia}</Campo>}
               {typeof item.valor === "number" && (
@@ -109,8 +111,7 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                   <Valor valor={item.valor} />
                 </Campo>
               )}
-              {item.favorecido && <Campo rotulo="Favorecido">{item.favorecido}</Campo>}
-              {item.coordenacao && <Campo rotulo="Coordenação">{item.coordenacao}</Campo>}
+              {item.motivoAprovacao && <Campo rotulo="Aprovação">{item.motivoAprovacao}</Campo>}
               {item.etapas && (
                 <Campo rotulo="Etapas">
                   <div

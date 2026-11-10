@@ -1,105 +1,62 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { leitorDaSessao } from "@/lib/auth";
 import { AbrirItem } from "@/components/pauta/abrir-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
+import { BotaoItem } from "@/components/pauta/botao-item";
 import { ConteudoLinha } from "@/components/pauta/linha";
-import { LinhaItem, MetaItem, RotuloItem, Secao } from "@/components/pauta/secao";
+import { RotuloNivel } from "@/components/pauta/nivel";
+import { LinhaItem, Secao } from "@/components/pauta/secao";
 import { Valor } from "@/components/pauta/valor";
-import { dataPorExtenso, hoje, type DataISO } from "@/lib/calendario";
+import { dataPorExtenso, hoje } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
 import { dataDeTeste, fixturePagamentosAtiva } from "@/lib/edicao/data-dev";
 import { fixturePagamentos } from "@/lib/edicao/fixture-pagamentos";
 import { itemDaUrl } from "@/lib/edicao/item-da-url";
-import type { ItemJornal } from "@/lib/edicao/itens";
 import { obterItens } from "@/lib/edicao/obter";
-import { montarPagamentos, type TotaisMes } from "@/lib/edicao/pagamentos";
-import { dataCurta } from "@/lib/formato";
-import { cn } from "@/lib/utils";
+import { montarPagamentos, type PagamentoAguardando } from "@/lib/edicao/pagamentos";
+import { nivelUrgencia } from "@/lib/edicao/urgencia";
+import { contagem } from "@/lib/formato";
+import type { DataISO } from "@/lib/calendario";
+import type { ItemEdicao } from "@/lib/edicao/itens";
 
 export const metadata: Metadata = { title: "Pagamentos" };
 
-/** Previsto, Pago e A pagar do mês, com a régua de tinta fina (pago ÷ previsto). */
-function BlocoMes({ t, pequeno }: { t: TotaisMes; pequeno?: boolean }) {
-  if (t.quantidade === 0) return <p className="py-2 text-base text-tinta-2">Nenhum pagamento previsto.</p>;
-  const pct = t.previsto > 0 ? Math.min(100, Math.round((t.pago / t.previsto) * 100)) : 0;
-  const linhas: [string, number][] = [
-    ["Previsto", t.previsto],
-    ["Pago", t.pago],
-    ["A pagar", t.aPagar],
-  ];
+/** Valor e motivo da aprovação, em duas linhas curtas (cabem ao lado do prazo em telas de 375px). */
+function MetaPagamento({ item }: { item: ItemEdicao }) {
   return (
-    <div className="mt-2">
-      <dl>
-        {linhas.map(([rotulo, valor]) => (
-          <div key={rotulo} className={cn("flex items-baseline justify-between gap-4 border-b border-borda last:border-b-0", pequeno ? "py-1" : "py-2")}>
-            <dt className={cn("text-tinta-2", pequeno ? "text-[0.875rem]" : "text-[0.9375rem]")}>{rotulo}</dt>
-            <dd className={cn("whitespace-nowrap font-semibold tabular-nums", pequeno ? "text-[0.9375rem]" : "text-[1.125rem]")}>
-              <Valor valor={valor} />
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <div
-        role="progressbar"
-        aria-label={`Pago do previsto em ${t.rotulo}`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={pct}
-        className="mt-3 h-0.5 w-full bg-borda"
-      >
-        <div className="h-full bg-tinta" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="mt-1.5 text-[0.875rem] tabular-nums text-tinta-2">{pct}% pago</p>
-    </div>
+    <>
+      <span className="block font-semibold tabular-nums text-tinta">{typeof item.valor === "number" ? <Valor valor={item.valor} /> : "Sem valor informado"}</span>
+      {item.motivoAprovacao && <span className="block">{item.motivoAprovacao}</span>}
+    </>
   );
 }
 
-interface LinhaPag {
-  item: ItemJornal;
-  /** mostra "venc. dd de mmm" ao lado do selo */
-  vencimento?: boolean;
-  /** texto acima da linha do gestor (ex.: motivo de um travado) */
-  motivo?: string | null;
+/** Pagamento aguardando aprovação: barra na cor da urgência, nome, valor, motivo e o prazo (texto + cor). */
+function LinhaAguardando({ p, hoje: dia }: { p: PagamentoAguardando; hoje: DataISO }) {
+  const nivel = nivelUrgencia(p.item, dia, getConfig());
+  return (
+    <LinhaItem item={p.item} hoje={dia}>
+      <ConteudoLinha item={p.item} mostrarTipo={false} meta={<MetaPagamento item={p.item} />} direita={<RotuloNivel nivel={nivel} rotulo={p.rotulo} />} />
+    </LinhaItem>
+  );
 }
 
-/** Linha de pagamento: nome / "{gestor} · {área} · {valor}" (uma linha) / nível + vencimento. A barra de 4px tem a cor do nível. */
-const Linhas = ({ itens, hoje }: { itens: LinhaPag[]; hoje: DataISO }) => (
-  <ul>
-    {itens.map(({ item, vencimento, motivo }) => (
-      <LinhaItem key={item.id} item={item} hoje={hoje}>
-        <ConteudoLinha
-          item={item}
-          mostrarTipo={false}
-          meta={
-            <>
-              {motivo !== undefined && (
-                <>
-                  {motivo ?? "Sem motivo informado"}
-                  <br />
-                </>
-              )}
-              <MetaItem item={item} />
-              <span className="mt-1.5 flex items-center gap-2 text-[0.9375rem]">
-                <RotuloItem item={item} hoje={hoje} className="max-w-none text-left" />
-                {vencimento && <span className="whitespace-nowrap">venc. {dataCurta(item.data)}</span>}
-              </span>
-            </>
-          }
-        />
-      </LinhaItem>
-    ))}
-  </ul>
-);
+/** Pagamento já aprovado: sem barra e sem cor (apagado). */
+function LinhaAprovado({ item }: { item: ItemEdicao }) {
+  return (
+    <li className="border-b border-borda last:border-b-0">
+      <BotaoItem item={item}>
+        <ConteudoLinha item={item} mostrarTipo={false} meta={<MetaPagamento item={item} />} />
+      </BotaoItem>
+    </li>
+  );
+}
 
 export default async function PaginaPagamentos({ searchParams }: PageProps<"/pagamentos">) {
   const sp = await searchParams;
-  // Aba oculta: 404 para todos, menos o importador da Multiseguros (abre por URL, com aviso)
-  const oculta = !getConfig().abas.pagamentos;
-  if (oculta) {
-    const leitor = await leitorDaSessao();
-    if (leitor?.email.toLowerCase() !== getConfig().multiseguros.importador_email.toLowerCase()) notFound();
-  }
+  // Aba oculta (abas.pagamentos = false): 404 para todos.
+  if (!getConfig().abas.pagamentos) notFound();
+
   const hojeEfetivo = dataDeTeste(sp.data, process.env.NODE_ENV) ?? hoje();
   // ?fixture=pagamentos: dados de exemplo, SÓ fora de produção (o quadro real pode estar vazio).
   const exemplo = fixturePagamentosAtiva(sp.fixture, process.env.NODE_ENV);
@@ -107,7 +64,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
   const itens = exemplo
     ? fixturePagamentos(hojeEfetivo)
     : await obterItens().then(
-        (d) => d.itens,
+        (d) => [...d.itens, ...d.semPrazo],
         (erro: unknown) => {
           console.error("[pagamentos] itens indisponíveis:", erro instanceof Error ? erro.message : "erro desconhecido");
           return null;
@@ -117,11 +74,10 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
 
   const p = montarPagamentos(itens, hojeEfetivo, getConfig());
   const itemAberto = await itemDaUrl(sp.item); // ?item=ID: aberto por uma notificação
-  const maiorSaida = Math.max(0, ...p.saidasPorData.map((s) => s.total));
+  const { aguardando, aprovados } = p;
 
   return (
     <>
-      {oculta && <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">Em construção — oculta para o diretor</p>}
       {itemAberto && <AbrirItem item={itemAberto} />}
       {(exemplo || sp.data) && (
         <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">
@@ -129,61 +85,36 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
         </p>
       )}
       <h2 className="titulo-jornal text-[1.75rem]">Pagamentos</h2>
-      <p className="mt-1 text-[0.9375rem] text-tinta-2">Pagamentos lançados no quadro</p>
+      <p className="mt-1 text-[0.9375rem] text-tinta-2">Para a sua aprovação</p>
 
-      {p.vazio ? (
-        <p className="mt-8 border-t border-borda pt-5 text-base text-tinta-2">Nenhum pagamento lançado ainda.</p>
-      ) : (
-        <>
-          <Secao id="s-mes" titulo={`${p.mesAtual.rotulo} em números`}>
-            <BlocoMes t={p.mesAtual} />
-          </Secao>
-          <Secao id="s-prox" titulo={`${p.proximoMes.rotulo} em números`} pequeno>
-            <BlocoMes t={p.proximoMes} pequeno />
-          </Secao>
+      <Secao id="s-aguardando" titulo="Aguardando sua aprovação">
+        {aguardando.quantidade === 0 ? (
+          <p className="py-3 text-base text-tinta-2">Nenhum pagamento aguardando aprovação.</p>
+        ) : (
+          <>
+            <p className="mb-2 flex items-baseline justify-between gap-4 text-[0.9375rem] text-tinta-2">
+              <span>{contagem(aguardando.quantidade, "pagamento", "pagamentos")}</span>
+              <span className="whitespace-nowrap text-[1.125rem] font-semibold tabular-nums text-tinta">
+                <Valor valor={aguardando.total} />
+              </span>
+            </p>
+            <ul>
+              {aguardando.itens.map((x) => (
+                <LinhaAguardando key={x.item.id} p={x} hoje={hojeEfetivo} />
+              ))}
+            </ul>
+          </>
+        )}
+      </Secao>
 
-          {p.atrasados.length > 0 && (
-            <Secao id="s-atrasados" titulo="Atrasados" alerta>
-              <Linhas itens={p.atrasados.map(({ item }) => ({ item, vencimento: true }))} hoje={hojeEfetivo} />
-            </Secao>
-          )}
-
-          <Secao id="s-saidas" titulo="Saídas por data">
-            {p.saidasPorData.length === 0 ? (
-              <p className="py-3 text-base text-tinta-2">Nenhuma saída prevista nos próximos 45 dias.</p>
-            ) : (
-              <ul>
-                {p.saidasPorData.map((s) => (
-                  <li key={s.data} className="border-b border-borda py-3 last:border-b-0">
-                    <div className="flex items-center gap-3">
-                      <span className={cn("w-[4.75rem] shrink-0 text-[0.9375rem] font-medium tabular-nums", s.ehDiaUtil ? "text-tinta" : "text-tinta-2")}>{s.rotulo}</span>
-                      {/* barra proporcional ao total do dia: só tokens do design, sem biblioteca de gráfico */}
-                      <span aria-hidden className="relative h-2 min-w-0 flex-1 rounded-sm bg-papel-alt">
-                        <span className="absolute inset-y-0 left-0 rounded-sm bg-tinta" style={{ width: `${Math.max(3, (s.total / maiorSaida) * 100)}%` }} />
-                      </span>
-                      <span className="w-[6.5rem] shrink-0 whitespace-nowrap text-right text-[0.9375rem] font-semibold tabular-nums">
-                        <Valor valor={s.total} />
-                      </span>
-                    </div>
-                    <Linhas itens={s.itens.map((item) => ({ item }))} hoje={hojeEfetivo} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Secao>
-
-          {p.maioresDoMes.length > 0 && (
-            <Secao id="s-maiores" titulo="Maiores do mês">
-              <Linhas itens={p.maioresDoMes.map((item) => ({ item, vencimento: true }))} hoje={hojeEfetivo} />
-            </Secao>
-          )}
-
-          {p.travados.length > 0 && (
-            <Secao id="s-travados" titulo="Travados">
-              <Linhas itens={p.travados.map(({ item, motivo }) => ({ item, motivo, vencimento: true }))} hoje={hojeEfetivo} />
-            </Secao>
-          )}
-        </>
+      {aprovados.length > 0 && (
+        <Secao id="s-aprovados" titulo="Aprovados recentemente" pequeno>
+          <ul>
+            {aprovados.map((item) => (
+              <LinhaAprovado key={item.id} item={item} />
+            ))}
+          </ul>
+        </Secao>
       )}
     </>
   );

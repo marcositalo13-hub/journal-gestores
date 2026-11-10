@@ -8,6 +8,7 @@ import { janelaPadrao } from "../recorrencia";
 import { montarColumnValuesArea } from "./aplicar";
 import { RotuloNaoResolvido } from "../rotulos";
 import { classificarItem, detectarChavesDuplicadas, normalizarQuadro, type QuadroLido } from "./ler";
+import { cfgPorMes } from "./config-por-mes";
 import { nomeOcorrencia, planejarQuadro, type AcaoArea } from "./planejar";
 
 const cfg = getConfig();
@@ -315,7 +316,7 @@ describe("edição", () => {
   });
 });
 
-describe("Pagamentos (por_mes) não muda", () => {
+describe("layout por_mes (genérico) não muda", () => {
   const colsPag = [
     { id: "venc", title: "Vencimento", type: "date" },
     { id: "val", title: "Valor (R$)", type: "numbers" },
@@ -352,13 +353,13 @@ describe("Pagamentos (por_mes) não muda", () => {
       items_page: { cursor: null, items: [] },
     },
     [item("1", "Cadastro", "2026-11-10", null), item("2", "Novembro 2026", "2026-11-10", "1:2026-11-10")],
-    cfg,
+    cfgPorMes,
   );
 
   it("mesma leitura e mesmo plano de antes; nenhuma ação por_area", () => {
     expect(q.itens.every((i) => i.porArea === undefined)).toBe(true);
     expect(q.itens[0].noCadastro).toBe(true);
-    const p = planejarQuadro(q, JANELA, cfg, HOJE);
+    const p = planejarQuadro(q, JANELA, cfgPorMes, HOJE);
     expect(p.acoesArea).toEqual([]);
     expect(p.acoes.map((a) => [a.tipo, a.itemNome, a.ocorrencia.chave, a.grupoExiste])).toEqual([
       ["existe", "Pag 1", "1:2026-11-10", true],
@@ -366,14 +367,14 @@ describe("Pagamentos (por_mes) não muda", () => {
     ]);
   });
   it("na edição a ocorrência entra e a regra do Cadastro não", () => {
-    expect(montarItensJornal([q], cfg).itens.map((i) => i.id)).toEqual(["2"]);
+    expect(montarItensJornal([q], cfgPorMes).itens.map((i) => i.id)).toEqual(["2"]);
   });
 });
 
 describe("config", () => {
   it("layouts e quadro aposentado", () => {
     expect(cfg.quadros.map((q) => [q.id, q.layout])).toEqual([
-      ["18434047675", "por_mes"],
+      ["18434047675", "lista"],
       ["18438464813", "por_area"],
     ]);
     expect(cfg.quadros_ignorados).toContain("18434048054");

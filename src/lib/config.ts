@@ -2,8 +2,11 @@ import raw from "../../config/jornal.config.json";
 
 export type TipoQuadro = "atividades" | "pagamentos";
 export type TipoColuna = "status" | "date" | "dropdown" | "text" | "numbers";
-/** por_mes: Cadastro + grupos de mês. por_area: um grupo por área + grupo de finalizadas. */
-export type LayoutQuadro = "por_mes" | "por_area";
+/**
+ * por_mes: Cadastro + grupos de mês. por_area: um grupo por área + grupo de finalizadas.
+ * lista: itens digitados à mão, sem recorrência nem grupos de mês; só o grupo de finalizados (quadro de Pagamentos).
+ */
+export type LayoutQuadro = "por_mes" | "por_area" | "lista";
 export type AjusteDiaNaoUtil = "manter_e_avisar" | "dia_util_mais_proximo";
 
 export interface Leitor {
@@ -20,17 +23,20 @@ export interface Notificacoes {
   janela_fim: string;
   /** intervalo mínimo entre envios "normais" (agrupados) */
   agrupar_minutos: number;
-  /** R3: valor mínimo (R$) de um pagamento relevante */
-  pagamento_relevante: number;
-  /** R3: vencimento em até N dias corridos */
-  pagamento_antecedencia_dias: number;
   /** R1/R4: item criado há no máximo N horas */
   novo_horas: number;
 }
 
 export interface Abas {
-  /** false: a aba Pagamentos some para todos, e /pagamentos só abre para multiseguros.importador_email */
+  /** false: a aba Pagamentos some para todos e /pagamentos responde 404 */
   pagamentos: boolean;
+}
+
+export interface PagamentosConfig {
+  /** valor (R$) a partir do qual o pagamento exige a aprovação do diretor ("Acima de R$ 100 mil"); abaixo, "Área subordinada" */
+  aprovacao_diretor_a_partir_de: number;
+  /** "Aprovados recentemente": aprovados (atualizados) nos últimos N dias */
+  aprovados_recentes_dias: number;
 }
 
 export interface Urgencia {
@@ -39,9 +45,6 @@ export interface Urgencia {
 }
 
 export interface Manchete {
-  /** valor (R$) a partir do qual um pagamento pode virar manchete */
-  pagamento_relevante_a_partir_de: number;
-  pagamento_antecedencia_dias: number;
   contrato_antecedencia_dias: number;
 }
 
@@ -61,6 +64,8 @@ export interface QuadroConfig {
   tipo: TipoQuadro;
   layout: LayoutQuadro;
   dono: string;
+  /** grupo de itens finalizados deste quadro (obrigatório em "lista"; nos demais vale o grupo_finalizadas global) */
+  grupo_finalizadas?: string;
 }
 
 export interface TipoQuadroConfig {
@@ -69,7 +74,8 @@ export interface TipoQuadroConfig {
   colunas: Record<string, TipoColuna>;
   obrigatorias: string[];
   status_concluido: string;
-  status_travado: string;
+  /** só em quadros de atividades; sem ele nenhum item é "travado" */
+  status_travado?: string;
   status_cancelado: string;
   status_inicial: string;
   /** só em quadros por_area: rótulo que marca um item como regra de recorrência */
@@ -82,8 +88,6 @@ export interface JornalConfig {
   timezone: string;
   workspace_id: string;
   diretor: string;
-  /** coordenação (rótulo da coluna dos Pagamentos) → nome do gestor que responde por ela */
-  coordenacoes: Record<string, string>;
   /** quem pode entrar no app (e-mail comparado em minúsculas) e o nome usado na saudação */
   leitores: Leitor[];
   gestores: Gestor[];
@@ -101,7 +105,7 @@ export interface JornalConfig {
   manchete: Manchete;
   urgencia: Urgencia;
   abas: Abas;
-  multiseguros: { importador_email: string };
+  pagamentos: PagamentosConfig;
   notificacoes: Notificacoes;
   /** recorte das fotos por slug ({"joao-silva": "center"}); o padrão é "north" */
   fotos_recorte?: Record<string, RecorteFoto>;
@@ -193,14 +197,6 @@ export function validarConfig(c: unknown): JornalConfig {
   });
   if (areas.includes(o.grupo_finalizadas)) erros.push(`"grupo_finalizadas" não pode ser igual à área de um gestor`);
 
-  const nomesGestores = new Set(arr("gestores").map((g) => (g as Record<string, unknown>)?.nome));
-  if (typeof o.coordenacoes !== "object" || o.coordenacoes === null || Array.isArray(o.coordenacoes)) erros.push(`"coordenacoes" deve ser objeto { coordenação: gestor }`);
-  else {
-    for (const [coord, gestor] of Object.entries(o.coordenacoes as Record<string, unknown>)) {
-      if (typeof gestor !== "string" || !nomesGestores.has(gestor)) erros.push(`coordenacoes["${coord}"] deve ser o nome de um gestor do config: ${String(gestor)}`);
-    }
-  }
-
   const ignorados = arr("quadros_ignorados");
   ignorados.forEach((q, i) => {
     if (typeof q !== "string") erros.push(`quadros_ignorados[${i}] deve ser string`);
@@ -217,7 +213,15 @@ export function validarConfig(c: unknown): JornalConfig {
     }
     if (!TIPOS_QUADRO.includes(x?.tipo as TipoQuadro)) erros.push(`quadros[${i}].tipo inválido: ${String(x?.tipo)}`);
     if (typeof x?.dono !== "string") erros.push(`quadros[${i}].dono deve ser string`);
-    if (x?.layout !== "por_mes" && x?.layout !== "por_area") erros.push(`quadros[${i}].layout deve ser "por_mes" ou "por_area": ${String(x?.layout)}`);
+    if (x?.layout !== "por_mes" && x?.layout !== "por_area" && x?.layout !== "lista") erros.push(`quadros[${i}].layout deve ser "por_mes", "por_area" ou "lista": ${String(x?.layout)}`);
+    if (x?.grupo_finalizadas !== undefined && (typeof x.grupo_finalizadas !== "string" || x.grupo_finalizadas.trim() === "")) erros.push(`quadros[${i}].grupo_finalizadas deve ser string não vazia`);
+    if (x?.layout === "lista" && typeof x.grupo_finalizadas !== "string") erros.push(`quadros[${i}]: layout lista exige grupo_finalizadas`);
+    if (x?.layout === "por_mes" || x?.layout === "por_area") {
+      const cols = (((o.tipos_de_quadro ?? {}) as Record<string, Record<string, unknown> | undefined>)[String(x?.tipo)]?.colunas ?? {}) as Record<string, unknown>;
+      for (const k of ["Recorrência", "Chave"]) {
+        if (!(k in cols)) erros.push(`quadros[${i}]: layout ${String(x.layout)} exige a coluna "${k}" em tipos_de_quadro.${String(x?.tipo)}.colunas`);
+      }
+    }
     if (x?.layout === "por_area") {
       const t = ((o.tipos_de_quadro ?? {}) as Record<string, Record<string, unknown> | undefined>)[String(x?.tipo)];
       if (typeof t?.status_regra !== "string") erros.push(`quadros[${i}]: layout por_area exige tipos_de_quadro.${String(x?.tipo)}.status_regra`);
@@ -244,17 +248,15 @@ export function validarConfig(c: unknown): JornalConfig {
     }
     if (typeof x.data === "string" && colunas[x.data] !== "date") erros.push(`${p}.data ("${x.data}") deve ser coluna do tipo date`);
     if (typeof x.status === "string" && colunas[x.status] !== "status") erros.push(`${p}.status ("${x.status}") deve ser coluna do tipo status`);
-    for (const k of ["status_concluido", "status_travado", "status_cancelado", "status_inicial"]) {
+    for (const k of ["status_concluido", "status_cancelado", "status_inicial"]) {
       if (typeof x[k] !== "string") erros.push(`${p}.${k} deve ser string`);
     }
+    if (x.status_travado !== undefined ? typeof x.status_travado !== "string" : t === "atividades") erros.push(`${p}.status_travado deve ser string`);
     if (!Array.isArray(x.obrigatorias)) erros.push(`${p}.obrigatorias deve ser array`);
     else
       for (const ob of x.obrigatorias) {
         if (typeof ob !== "string" || !(ob in colunas)) erros.push(`${p}.obrigatorias: "${String(ob)}" não está em colunas`);
       }
-    for (const k of ["Recorrência", "Chave"]) {
-      if (!(k in colunas)) erros.push(`${p}.colunas deve incluir "${k}"`);
-    }
     if (!AJUSTES.includes(x.ajuste_dia_nao_util as AjusteDiaNaoUtil)) erros.push(`${p}.ajuste_dia_nao_util inválido: ${String(x.ajuste_dia_nao_util)}`);
   }
 
@@ -269,8 +271,6 @@ export function validarConfig(c: unknown): JornalConfig {
         erros.push(`manchete.${k} deve ser número ${inteiro ? "inteiro " : ""}>= 0`);
       }
     };
-    num("pagamento_relevante_a_partir_de", false);
-    num("pagamento_antecedencia_dias", true);
     num("contrato_antecedencia_dias", true);
   }
   const uc = (o.urgencia ?? {}) as Record<string, unknown>;
@@ -281,9 +281,16 @@ export function validarConfig(c: unknown): JornalConfig {
   const ab = (o.abas ?? {}) as Record<string, unknown>;
   if (typeof o.abas !== "object" || o.abas === null) erros.push(`"abas" deve ser objeto`);
   else if (typeof ab.pagamentos !== "boolean") erros.push(`abas.pagamentos deve ser true ou false`);
-  const ms = (o.multiseguros ?? {}) as Record<string, unknown>;
-  if (typeof o.multiseguros !== "object" || o.multiseguros === null) erros.push(`"multiseguros" deve ser objeto`);
-  else if (typeof ms.importador_email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ms.importador_email)) erros.push(`multiseguros.importador_email deve ser um e-mail`);
+  const pg = (o.pagamentos ?? {}) as Record<string, unknown>;
+  if (typeof o.pagamentos !== "object" || o.pagamentos === null) erros.push(`"pagamentos" deve ser objeto`);
+  else {
+    if (typeof pg.aprovacao_diretor_a_partir_de !== "number" || !Number.isFinite(pg.aprovacao_diretor_a_partir_de) || pg.aprovacao_diretor_a_partir_de < 0) {
+      erros.push(`pagamentos.aprovacao_diretor_a_partir_de deve ser número >= 0`);
+    }
+    if (typeof pg.aprovados_recentes_dias !== "number" || !Number.isInteger(pg.aprovados_recentes_dias) || pg.aprovados_recentes_dias < 1) {
+      erros.push(`pagamentos.aprovados_recentes_dias deve ser número inteiro >= 1`);
+    }
+  }
   const nt = (o.notificacoes ?? {}) as Record<string, unknown>;
   if (typeof o.notificacoes !== "object" || o.notificacoes === null) erros.push(`"notificacoes" deve ser objeto`);
   else {
@@ -297,12 +304,9 @@ export function validarConfig(c: unknown): JornalConfig {
     if (typeof nt.janela_inicio === "string" && typeof nt.janela_fim === "string" && nt.janela_inicio >= nt.janela_fim) {
       erros.push(`notificacoes.janela_inicio deve ser antes de janela_fim`);
     }
-    for (const k of ["agrupar_minutos", "pagamento_antecedencia_dias", "novo_horas"]) {
+    for (const k of ["agrupar_minutos", "novo_horas"]) {
       const v = nt[k];
       if (typeof v !== "number" || !Number.isInteger(v) || v < 1) erros.push(`notificacoes.${k} deve ser número inteiro >= 1`);
-    }
-    if (typeof nt.pagamento_relevante !== "number" || !Number.isFinite(nt.pagamento_relevante) || nt.pagamento_relevante < 0) {
-      erros.push(`notificacoes.pagamento_relevante deve ser número >= 0`);
     }
   }
   if (o.fotos_recorte !== undefined) {
@@ -344,13 +348,9 @@ export function ehLeitor(email: string | null | undefined, cfg: JornalConfig = g
   return leitorPorEmail(email, cfg) !== null;
 }
 
-/** Gestor que responde por uma coordenação dos Pagamentos (primeiro rótulo conhecido), ou null. */
-export function gestorDaCoordenacao(rotulos: string[] | null | undefined, cfg: JornalConfig = getConfig()): string | null {
-  for (const r of rotulos ?? []) {
-    const g = cfg.coordenacoes[r.trim()];
-    if (g) return g;
-  }
-  return null;
+/** Grupo de itens finalizados do quadro (o do próprio quadro, senão o global). */
+export function grupoFinalizadasDoQuadro(qc: Pick<QuadroConfig, "grupo_finalizadas">, cfg: JornalConfig = getConfig()): string {
+  return qc.grupo_finalizadas ?? cfg.grupo_finalizadas;
 }
 
 /** Gestor que responde por uma área (título do grupo ou rótulo da coluna Área), ou null. */

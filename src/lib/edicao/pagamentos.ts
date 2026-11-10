@@ -1,93 +1,81 @@
-// Visão da aba Pagamentos. Pura: tudo entra por argumento. Só considera itens de quadros de pagamentos.
-import { diasEntre, ehDiaUtil, formatar, nomeDoMes, partes, rotuloDia, somarDias, somarMeses, type DataISO } from "../calendario";
+// Visão da aba Pagamentos: pagamentos que esperam a aprovação do diretor. Pura: tudo entra por argumento.
+// Categorias (config): "Aguardando aprovação" = aberto, "Aprovado" = concluído, "Cancelado" = cancelado.
+import { diasEntre, hoje as hojeSP, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
-import type { ItemJornal } from "./itens";
+import { moeda } from "../formato";
+import type { ItemEdicao } from "./itens";
 
-/** Janela das saídas por data: de hoje até hoje + 45 dias (inclusive). */
-export const DIAS_SAIDAS = 45;
-export const QTD_MAIORES = 5;
+export const MOTIVO_AREA = "Área subordinada";
 
-export interface TotaisMes {
-  /** "2026-11" */
-  mes: string;
-  /** "Novembro" */
-  rotulo: string;
-  /** soma dos pagamentos do mês, exceto cancelados */
-  previsto: number;
-  /** soma dos pagos */
-  pago: number;
-  /** previsto − pago */
-  aPagar: number;
-  /** quantidade de pagamentos não cancelados no mês */
-  quantidade: number;
+/** "R$ 100 mil" para múltiplos de mil; senão o valor por extenso ("R$ 99.999,99"). */
+export function textoLimite(valor: number): string {
+  return valor >= 1000 && valor % 1000 === 0 ? `R$ ${new Intl.NumberFormat("pt-BR").format(valor / 1000)} mil` : moeda(valor);
 }
 
-export interface SaidaDia {
-  data: DataISO;
-  /** "sex. 09/10" */
+/**
+ * Por que o pagamento chega ao diretor: valor a partir do limite do config → "Acima de R$ 100 mil";
+ * abaixo disso → "Área subordinada". O limite é inclusivo (R$ 100.000,00 já é "Acima de").
+ */
+export function motivoAprovacao(valor: number, cfg: JornalConfig): string {
+  const limite = cfg.pagamentos.aprovacao_diretor_a_partir_de;
+  return valor >= limite ? `Acima de ${textoLimite(limite)}` : MOTIVO_AREA;
+}
+
+/** Prazo em dias corridos até o vencimento: "Vence hoje" | "Amanhã" | "Em N dias" | "Venceu há N dias". */
+export function rotuloVencimento(dias: number): string {
+  if (dias < 0) {
+    const n = -dias;
+    return `Venceu há ${n} ${n === 1 ? "dia" : "dias"}`;
+  }
+  return dias === 0 ? "Vence hoje" : dias === 1 ? "Amanhã" : `Em ${dias} dias`;
+}
+
+export interface PagamentoAguardando {
+  item: ItemEdicao;
+  /** dias corridos até o vencimento (negativo = vencido); null sem Vencimento */
+  dias: number | null;
+  /** "Vence hoje", "Amanhã", "Em N dias", "Venceu há N dias" ou "Sem vencimento" */
   rotulo: string;
-  ehDiaUtil: boolean;
-  total: number;
-  itens: ItemJornal[];
 }
 
 export interface Pagamentos {
   data: DataISO;
-  /** nenhum pagamento (não cancelado) lançado */
-  vazio: boolean;
-  mesAtual: TotaisMes;
-  proximoMes: TotaisMes;
-  /** vencimento < hoje, ainda não pagos nem cancelados; os mais antigos primeiro */
-  atrasados: { item: ItemJornal; diasAtraso: number }[];
-  /** próximos 45 dias: só o que ainda sai (aberto/travado), agrupado por data */
-  saidasPorData: SaidaDia[];
-  /** maiores valores do mês corrente (não cancelados) */
-  maioresDoMes: ItemJornal[];
-  travados: { item: ItemJornal; motivo: string | null }[];
+  aguardando: {
+    /** vencimento mais antigo primeiro; sem Vencimento por último */
+    itens: PagamentoAguardando[];
+    quantidade: number;
+    /** soma dos valores (item sem Valor conta zero) */
+    total: number;
+  };
+  /** aprovados (e atualizados) nos últimos `aprovados_recentes_dias` dias, o mais recente primeiro */
+  aprovados: ItemEdicao[];
 }
 
-const soma = (itens: ItemJornal[]) => Math.round(itens.reduce((t, i) => t + (i.valor ?? 0), 0) * 100) / 100;
-const emAberto = (i: ItemJornal) => i.categoria === "aberto" || i.categoria === "travado";
-const porDataENome = (a: ItemJornal, b: ItemJornal) => a.data.localeCompare(b.data) || a.nome.localeCompare(b.nome, "pt-BR");
+const centavos = (n: number) => Math.round(n * 100) / 100;
+const porNome = (a: ItemEdicao, b: ItemEdicao) => a.nome.localeCompare(b.nome, "pt-BR");
 
-function totaisDoMes(itens: ItemJornal[], ano: number, mes: number): TotaisMes {
-  const chave = formatar(ano, mes, 1).slice(0, 7);
-  const doMes = itens.filter((i) => i.data.startsWith(chave));
-  const previsto = soma(doMes);
-  const pago = soma(doMes.filter((i) => i.categoria === "concluido"));
-  return { mes: chave, rotulo: nomeDoMes(mes), previsto, pago, aPagar: Math.round((previsto - pago) * 100) / 100, quantidade: doMes.length };
-}
+/** Só considera itens de quadros de pagamentos; cancelados nunca aparecem. */
+export function montarPagamentos(itensBrutos: ItemEdicao[], hoje: DataISO, cfg: JornalConfig): Pagamentos {
+  const itens = itensBrutos.filter((i) => i.tipoQuadro === "pagamentos");
 
-export function montarPagamentos(itensBrutos: ItemJornal[], hoje: DataISO, cfg: JornalConfig): Pagamentos {
-  // não cancelados; ItemJornal de pagamentos vêm de quadros do tipo "pagamentos"
-  const itens = itensBrutos.filter((i) => i.tipoQuadro === "pagamentos" && i.categoria !== "cancelado");
-  const [ano, mes] = partes(hoje);
-  const [anoProx, mesProx] = somarMeses(ano, mes, 1);
-  const mesAtual = totaisDoMes(itens, ano, mes);
+  const aguardando = itens
+    .filter((i) => i.categoria === "aberto")
+    .sort((a, b) => (a.data === null ? 1 : 0) - (b.data === null ? 1 : 0) || (a.data ?? "").localeCompare(b.data ?? "") || porNome(a, b))
+    .map((item): PagamentoAguardando => {
+      const dias = item.data === null ? null : diasEntre(hoje, item.data);
+      return { item, dias, rotulo: dias === null ? "Sem vencimento" : rotuloVencimento(dias) };
+    });
 
-  const limite = somarDias(hoje, DIAS_SAIDAS);
-  const porData = new Map<DataISO, ItemJornal[]>();
-  for (const i of itens.filter((x) => emAberto(x) && x.data >= hoje && x.data <= limite).sort(porDataENome)) {
-    porData.set(i.data, [...(porData.get(i.data) ?? []), i]);
-  }
+  // Não há "data da aprovação" no quadro: vale a última atualização do item (em São Paulo).
+  const desde = somarDias(hoje, -cfg.pagamentos.aprovados_recentes_dias);
+  const quando = (i: ItemEdicao) => hojeSP(new Date(i.updatedAt), cfg);
+  const aprovados = itens
+    .filter((i) => i.categoria === "concluido" && quando(i) >= desde && quando(i) <= hoje)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || porNome(a, b));
 
   return {
     data: hoje,
-    vazio: itens.length === 0,
-    mesAtual,
-    proximoMes: totaisDoMes(itens, anoProx, mesProx),
-    atrasados: itens
-      .filter((i) => emAberto(i) && i.data < hoje)
-      .sort(porDataENome)
-      .map((item) => ({ item, diasAtraso: diasEntre(item.data, hoje) })),
-    saidasPorData: [...porData].map(([data, doDia]) => ({ data, rotulo: rotuloDia(data), ehDiaUtil: ehDiaUtil(data, cfg), total: soma(doDia), itens: doDia })),
-    maioresDoMes: itens
-      .filter((i) => i.data.startsWith(mesAtual.mes))
-      .sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0) || porDataENome(a, b))
-      .slice(0, QTD_MAIORES),
-    travados: itens
-      .filter((i) => i.categoria === "travado")
-      .sort(porDataENome)
-      .map((item) => ({ item, motivo: item.observacao ?? null })),
+    aguardando: { itens: aguardando, quantidade: aguardando.length, total: centavos(aguardando.reduce((t, p) => t + (p.item.valor ?? 0), 0)) },
+    aprovados,
   };
 }

@@ -1,6 +1,6 @@
 // Relê UM item do monday (nunca confiamos no payload do webhook) e normaliza com o código do coletor/edição.
 // Só servidor: usa o token do monday.
-import { ITEM_FIELDS, normalizarQuadro, type ColunaApi, type ItemApi, type QuadroApi } from "../coletor/ler";
+import { estaFinalizado, ITEM_FIELDS, normalizarQuadro, type ColunaApi, type ItemApi, type QuadroApi } from "../coletor/ler";
 import { getConfig, type JornalConfig } from "../config";
 import { montarItensJornal, type ItemEdicao } from "../edicao/itens";
 import { mondayQuery } from "../monday/client";
@@ -48,10 +48,8 @@ export async function relerItem(itemId: string, boardId: string, cfg: JornalConf
             data: j.data,
             criadoEm: n.createdAt,
             geradoPeloColetor: !!n.chave?.trim(),
-            finalizada: !!n.porArea?.finalizada,
+            finalizada: estaFinalizado(n),
             dono: j.dono,
-            ...(j.coordenacao ? { coordenacao: j.coordenacao } : {}),
-            ...(typeof j.valor === "number" ? { valor: j.valor } : {}),
           }
         : null,
   };

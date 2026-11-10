@@ -1,23 +1,28 @@
 import { describe, expect, it } from "vitest";
 import raw from "../../config/jornal.config.json";
-import { ConfigError, getConfig, validarConfig } from "./config";
+import { getConfig, validarConfig } from "./config";
 
 const comGestor = (extra: Record<string, unknown>) => ({ ...raw, gestores: [{ ...raw.gestores[0], ...extra }, ...raw.gestores.slice(1)] });
 
-describe("config: coordenacoes", () => {
-  it("mapa do config carregado", () => {
-    expect(getConfig().coordenacoes).toEqual({
-      Superintendência: "Solange Mata",
-      "Adm. e Financeira": "Keite Martins",
-      Controladoria: "João Silva",
-      "Contábil e Fiscal": "Graziely Palma",
-    });
+describe("config: sem coordenacoes nem multiseguros", () => {
+  it("as chaves antigas não existem mais", () => {
+    const c = getConfig() as unknown as Record<string, unknown>;
+    expect("coordenacoes" in c).toBe(false);
+    expect("multiseguros" in c).toBe(false);
   });
-  it("rejeita ausente, não-objeto e gestor que não existe no config", () => {
-    expect(() => validarConfig({ ...raw, coordenacoes: undefined })).toThrow(ConfigError);
-    expect(() => validarConfig({ ...raw, coordenacoes: [] })).toThrow(/coordenacoes/);
-    expect(() => validarConfig({ ...raw, coordenacoes: { Controladoria: "Fulano de Tal" } })).toThrow(/Fulano de Tal/);
-    expect(() => validarConfig({ ...raw, coordenacoes: { Controladoria: 3 } })).toThrow(/coordenacoes\["Controladoria"\]/);
+  it("o quadro de pagamentos é uma lista com grupo de finalizados próprio", () => {
+    const q = getConfig().quadros.find((x) => x.tipo === "pagamentos")!;
+    expect(q).toMatchObject({ layout: "lista", dono: "Egídio", grupo_finalizadas: "Finalizados" });
+  });
+  it("layout lista exige grupo_finalizadas; layouts por_mes/por_area exigem Recorrência e Chave; status_travado só é obrigatório em atividades", () => {
+    const quadros = (f: (q: Record<string, unknown>) => Record<string, unknown>) => raw.quadros.map((q) => (q.tipo === "pagamentos" ? f(q) : q));
+    expect(() => validarConfig({ ...raw, quadros: quadros((q) => ({ ...q, grupo_finalizadas: undefined })) })).toThrow(/lista exige grupo_finalizadas/);
+    expect(() => validarConfig({ ...raw, quadros: quadros((q) => ({ ...q, layout: "por_mes" })) })).toThrow(/exige a coluna "Chave"/);
+    const semTravado = { ...raw.tipos_de_quadro, atividades: { ...raw.tipos_de_quadro.atividades, status_travado: undefined } };
+    expect(() => validarConfig({ ...raw, tipos_de_quadro: semTravado })).toThrow(/atividades\.status_travado/);
+  });
+  it("configs com pagamentos em layout inválido são recusadas", () => {
+    expect(() => validarConfig({ ...raw, quadros: raw.quadros.map((q) => ({ ...q, layout: "tabela" })) })).toThrow(/layout/);
   });
 });
 

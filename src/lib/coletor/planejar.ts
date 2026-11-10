@@ -47,7 +47,7 @@ export function nomeOcorrencia(nomeRegra: string, dataOriginal: DataISO): string
 function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
   const t = cfg.tipos_de_quadro[q.tipo];
   const limite = somarDias(ref, -cfg.finalizar_apos_dias);
-  const finalizadas = q.grupos.find((g) => g.titulo === cfg.grupo_finalizadas);
+  const finalizadas = q.grupos.find((g) => g.titulo === q.grupoFinalizadas);
 
   // Existência no quadro INTEIRO: uma ocorrência finalizada não pode renascer.
   const chaves = new Set(q.itens.flatMap((i) => (i.chave ? [i.chave] : [])));
@@ -94,10 +94,31 @@ function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref:
   return plano;
 }
 
+/**
+ * Plano de um quadro "lista" (Pagamentos): sem recorrência, sem Chave e sem grupos de mês.
+ * Só finaliza: Aprovado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias vai para o grupo de finalizados.
+ * Itens sem Vencimento nunca são movidos (e já saem avisados como "obrigatória vazia").
+ */
+export function planejarLista(q: QuadroLido, plano: PlanoQuadro, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
+  const t = cfg.tipos_de_quadro[q.tipo];
+  const limite = somarDias(ref, -cfg.finalizar_apos_dias);
+  const finalizados = q.grupos.find((g) => g.titulo === q.grupoFinalizadas);
+  if (!finalizados) return plano; // o aviso "grupo_finalizadas_ausente" já foi emitido na leitura
+  for (const it of q.itens) {
+    if (it.lista?.finalizada) continue;
+    const encerrado = mesmoRotulo(it.status, t.status_concluido) || mesmoRotulo(it.status, t.status_cancelado);
+    if (encerrado && it.data && it.data <= limite) {
+      plano.acoesArea.push({ tipo: "seria_finalizado", itemId: it.id, itemNome: it.nome, data: it.data, status: it.status!, grupo: finalizados });
+    }
+  }
+  return plano;
+}
+
 export function planejarQuadro(q: QuadroLido, janela: Janela, cfg: JornalConfig = getConfig(), ref: DataISO = hojeSP(undefined, cfg)): PlanoQuadro {
   const tipoCfg = cfg.tipos_de_quadro[q.tipo];
   const plano: PlanoQuadro = { quadroId: q.id, quadroNome: q.nome, janela, acoes: [], acoesArea: [], ocorrenciasExistentes: 0, ignorados: [], avisos: [] };
   if (q.layout === "por_area") return planejarPorArea(q, plano, janela, ref, cfg);
+  if (q.layout === "lista") return planejarLista(q, plano, ref, cfg);
   const grupos = new Set(q.grupos.map((g) => g.titulo));
 
   // Chaves já materializadas em qualquer grupo de mês (= fora do Cadastro).

@@ -33,6 +33,7 @@ const quadro = (tipo: QuadroLido["tipo"], itens: ItemNormalizado[], dono = "Sola
   tipo,
   dono,
   layout: "por_mes",
+  grupoFinalizadas: "Atividades finalizadas",
   hierarchyType: "multi_level",
   grupos: [],
   colunas: {},
@@ -60,10 +61,14 @@ describe("montarItensJornal — quais itens entram", () => {
 
 describe("categoria e tipo", () => {
   it("mapeia os rótulos de status por tipo de quadro", () => {
-    expect(categoriaDoStatus("Pago", "pagamentos")).toBe("concluido");
+    expect(categoriaDoStatus("Aprovado", "pagamentos")).toBe("concluido");
+    expect(categoriaDoStatus("Cancelado", "pagamentos")).toBe("cancelado");
+    expect(categoriaDoStatus("Aguardando aprovação", "pagamentos")).toBe("aberto");
+    expect(categoriaDoStatus(null, "pagamentos")).toBe("aberto");
+    expect(categoriaDoStatus("Travado", "pagamentos")).toBe("aberto"); // pagamentos não têm status travado
     expect(categoriaDoStatus("Concluído", "atividades")).toBe("concluido");
-    expect(categoriaDoStatus("Pago", "atividades")).toBe("aberto"); // "Pago" não é o concluído de atividades
-    expect(categoriaDoStatus("Travado", "pagamentos")).toBe("travado");
+    expect(categoriaDoStatus("Aprovado", "atividades")).toBe("aberto"); // "Aprovado" não é o concluído de atividades
+    expect(categoriaDoStatus("Travado", "atividades")).toBe("travado");
     expect(categoriaDoStatus("Cancelado", "atividades")).toBe("cancelado");
     for (const s of ["Previsto", "Não iniciado", "Em andamento", null]) expect(categoriaDoStatus(s, "atividades")).toBe("aberto");
   });
@@ -81,17 +86,15 @@ describe("categoria e tipo", () => {
 });
 
 describe("campos copiados", () => {
-  it("pagamentos: valor, favorecido, coordenação, observação, recorrência, chave, dono", () => {
+  it("pagamentos: valor, motivo da aprovação, observação, recorrência, chave; dono = diretor", () => {
     const [i] = itensDe([
       quadro("pagamentos", [
         item({
-          status: "Pago",
+          status: "Aprovado",
           recorrencia: "Mensal",
           chave: "1:2026-10-10",
           valores: {
             "Valor (R$)": v({ number: 80000, text: "80000" }),
-            Favorecido: v({ text: "Imobiliária" }),
-            Coordenação: v({ labels: ["Adm. e Financeira"], text: "Adm. e Financeira" }),
             Observação: v({ text: "Data original 10/10 (sábado), ajustada para dia útil" }),
           },
         }),
@@ -100,13 +103,12 @@ describe("campos copiados", () => {
     expect(i).toMatchObject({
       quadroId: "100",
       tipoQuadro: "pagamentos",
-      dono: "Keite Martins", // coordenação "Adm. e Financeira"
+      dono: "Egídio", // pagamentos são do diretor
       data: "2026-10-10",
-      status: "Pago",
+      status: "Aprovado",
       categoria: "concluido",
       valor: 80000,
-      favorecido: "Imobiliária",
-      coordenacao: "Adm. e Financeira",
+      motivoAprovacao: "Área subordinada",
       observacao: "Data original 10/10 (sábado), ajustada para dia útil",
       recorrencia: "Mensal",
       chave: "1:2026-10-10",
