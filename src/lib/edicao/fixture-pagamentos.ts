@@ -5,10 +5,13 @@ import type { Categoria, ItemEdicao, ItemJornal } from "./itens";
 import { motivoAprovacao } from "./pagamentos";
 
 let n = 0;
-function pag(o: { nome: string; valor: number; data: DataISO | null; categoria?: Categoria; atualizadoHaDias?: number; observacao?: string }, hoje: DataISO): ItemEdicao {
+function pag(
+  o: { nome: string; valor: number; data: DataISO | null; categoria?: Categoria; autorizadoHaDias?: number; autorizadoPor?: string; observacao?: string },
+  hoje: DataISO,
+): ItemEdicao {
   n++;
   const categoria = o.categoria ?? "aberto";
-  const status = categoria === "concluido" ? "Aprovado" : categoria === "cancelado" ? "Cancelado" : "Aguardando aprovação";
+  const status = categoria === "concluido" ? "Autorizado" : categoria === "cancelado" ? "Cancelado" : "Aguardando autorização";
   const base = {
     id: `fx-pag-${n}`,
     nome: `[EXEMPLO] ${o.nome}`,
@@ -21,12 +24,14 @@ function pag(o: { nome: string; valor: number; data: DataISO | null; categoria?:
     valor: o.valor,
     motivoAprovacao: motivoAprovacao(o.valor, getConfig()),
     ...(o.observacao ? { observacao: o.observacao } : {}),
-    updatedAt: `${somarDias(hoje, -(o.atualizadoHaDias ?? 30))}T15:00:00Z`,
+    ...(categoria === "concluido" && o.autorizadoPor !== "" ? { autorizadoPor: o.autorizadoPor ?? "Egídio" } : {}),
+    ...(categoria === "concluido" && o.autorizadoHaDias !== undefined ? { autorizadoEm: somarDias(hoje, -o.autorizadoHaDias) } : {}),
+    updatedAt: `${somarDias(hoje, -(o.autorizadoHaDias ?? 30))}T15:00:00Z`,
   };
   return o.data ? ({ ...base, data: o.data } satisfies ItemJornal) : { ...base, data: null, motivo: "sem_prazo" };
 }
 
-/** Cenário relativo a `hoje`: vencidos, vencendo hoje/amanhã, mais adiante, sem vencimento, aprovados e cancelado. */
+/** Cenário relativo a `hoje`: vencidos, vencendo hoje/amanhã, mais adiante, sem vencimento, autorizados (vários meses) e cancelado. */
 export function fixturePagamentos(hoje: DataISO): ItemEdicao[] {
   n = 0;
   const d = (k: number) => somarDias(hoje, k);
@@ -38,9 +43,10 @@ export function fixturePagamentos(hoje: DataISO): ItemEdicao[] {
     pag({ nome: "Auditoria externa", valor: 99999.99, data: d(5) }, hoje),
     pag({ nome: "Reforma do 3º andar", valor: 300000, data: d(33) }, hoje),
     pag({ nome: "Fornecedor sem vencimento", valor: 9500, data: null }, hoje),
-    pag({ nome: "Energia elétrica (aprovada)", valor: 18400.5, data: d(2), categoria: "concluido", atualizadoHaDias: 1 }, hoje),
-    pag({ nome: "Honorários contábeis (aprovados)", valor: 132000, data: d(-3), categoria: "concluido", atualizadoHaDias: 6 }, hoje),
-    pag({ nome: "Aprovado há muito tempo", valor: 40000, data: d(-40), categoria: "concluido", atualizadoHaDias: 40 }, hoje),
-    pag({ nome: "Pagamento duplicado (cancelado)", valor: 999999, data: d(3), categoria: "cancelado", atualizadoHaDias: 1 }, hoje),
+    pag({ nome: "Energia elétrica", valor: 18400.5, data: d(2), categoria: "concluido", autorizadoHaDias: 1, observacao: "Conta de outubro" }, hoje),
+    pag({ nome: "Honorários contábeis", valor: 132000, data: d(-3), categoria: "concluido", autorizadoHaDias: 6, autorizadoPor: "Marcos" }, hoje),
+    pag({ nome: "Licença anual do ERP", valor: 120000, data: d(-40), categoria: "concluido", autorizadoHaDias: 45 }, hoje),
+    pag({ nome: "Autorizado direto no monday", valor: 4000, data: d(-50), categoria: "concluido", autorizadoPor: "" }, hoje),
+    pag({ nome: "Pagamento duplicado (cancelado)", valor: 999999, data: d(3), categoria: "cancelado" }, hoje),
   ];
 }

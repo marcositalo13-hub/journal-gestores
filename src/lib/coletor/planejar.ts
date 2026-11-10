@@ -96,8 +96,9 @@ function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref:
 
 /**
  * Plano de um quadro "lista" (Pagamentos): sem recorrência, sem Chave e sem grupos de mês.
- * Só finaliza: Aprovado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias vai para o grupo de finalizados.
+ * Só finaliza: Autorizado ou Cancelado com Vencimento <= hoje - finalizar_apos_dias vai para o grupo de finalizados.
  * Itens sem Vencimento nunca são movidos (e já saem avisados como "obrigatória vazia").
+ * Nunca grava colunas: o que o app autorizou (Status, Autorizado por/em) fica intacto; o item só muda de grupo.
  */
 export function planejarLista(q: QuadroLido, plano: PlanoQuadro, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
   const t = cfg.tipos_de_quadro[q.tipo];

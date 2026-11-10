@@ -36,7 +36,7 @@ export async function buscarItens(): Promise<DadosLidos> {
 
 // Cache de 300 s só da leitura; a edição é montada a cada chamada com a data de hoje,
 // assim ela não "vira" com atraso na virada do dia. (unstable_cache: não exige cacheComponents.)
-const lerComCache = unstable_cache(buscarItens, ["edicao-itens-v5"], { revalidate: 300, tags: ["edicao"] });
+const lerComCache = unstable_cache(buscarItens, ["edicao-itens-v6"], { revalidate: 300, tags: ["edicao"] });
 
 // Dedupe por requisição: o cabeçalho e a página pedem a edição na mesma renderização;
 // com o cache frio isso viraria duas leituras simultâneas no monday.

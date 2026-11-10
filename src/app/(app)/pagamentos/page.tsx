@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AbrirItem } from "@/components/pauta/abrir-item";
 import { ErroEdicao } from "@/components/pauta/atualizar";
-import { BotaoItem } from "@/components/pauta/botao-item";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { RotuloNivel } from "@/components/pauta/nivel";
-import { LinhaItem, Secao } from "@/components/pauta/secao";
+import { HistoricoAutorizados } from "@/components/pauta/historico-autorizados";
+import { LinhaItem } from "@/components/pauta/secao";
+import { SeletorPagamentos } from "@/components/pauta/seletor-pagamentos";
 import { Valor } from "@/components/pauta/valor";
 import { dataPorExtenso, hoje } from "@/lib/calendario";
 import { getConfig } from "@/lib/config";
@@ -41,17 +42,6 @@ function LinhaAguardando({ p, hoje: dia }: { p: PagamentoAguardando; hoje: DataI
   );
 }
 
-/** Pagamento já aprovado: sem barra e sem cor (apagado). */
-function LinhaAprovado({ item }: { item: ItemEdicao }) {
-  return (
-    <li className="border-b border-borda last:border-b-0">
-      <BotaoItem item={item}>
-        <ConteudoLinha item={item} mostrarTipo={false} meta={<MetaPagamento item={item} />} />
-      </BotaoItem>
-    </li>
-  );
-}
-
 export default async function PaginaPagamentos({ searchParams }: PageProps<"/pagamentos">) {
   const sp = await searchParams;
   // Aba oculta (abas.pagamentos = false): 404 para todos.
@@ -72,9 +62,10 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
       );
   if (!itens) return <ErroEdicao />;
 
-  const p = montarPagamentos(itens, hojeEfetivo, getConfig());
+  const p = montarPagamentos(itens, hojeEfetivo);
   const itemAberto = await itemDaUrl(sp.item); // ?item=ID: aberto por uma notificação
-  const { aguardando, aprovados } = p;
+  const { aguardando, autorizados } = p;
+  const ver = sp.ver === "autorizados" ? "autorizados" : "aguardando";
 
   return (
     <>
@@ -85,36 +76,27 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
         </p>
       )}
       <h2 className="titulo-jornal text-[1.75rem]">Pagamentos</h2>
-      <p className="mt-1 text-[0.9375rem] text-tinta-2">Para a sua aprovação</p>
+      <p className="mt-1 text-[0.9375rem] text-tinta-2">Para a sua autorização</p>
+      <SeletorPagamentos atual={ver} />
 
-      <Secao id="s-aguardando" titulo="Aguardando sua aprovação">
-        {aguardando.quantidade === 0 ? (
-          <p className="py-3 text-base text-tinta-2">Nenhum pagamento aguardando aprovação.</p>
-        ) : (
-          <>
-            <p className="mb-2 flex items-baseline justify-between gap-4 text-[0.9375rem] text-tinta-2">
-              <span>{contagem(aguardando.quantidade, "pagamento", "pagamentos")}</span>
-              <span className="whitespace-nowrap text-[1.125rem] font-semibold tabular-nums text-tinta">
-                <Valor valor={aguardando.total} />
-              </span>
-            </p>
-            <ul>
-              {aguardando.itens.map((x) => (
-                <LinhaAguardando key={x.item.id} p={x} hoje={hojeEfetivo} />
-              ))}
-            </ul>
-          </>
-        )}
-      </Secao>
-
-      {aprovados.length > 0 && (
-        <Secao id="s-aprovados" titulo="Aprovados recentemente" pequeno>
+      {ver === "autorizados" ? (
+        <HistoricoAutorizados grupos={autorizados} />
+      ) : aguardando.quantidade === 0 ? (
+        <p className="py-6 text-base text-tinta-2">Nenhum pagamento aguardando autorização.</p>
+      ) : (
+        <section aria-label="Aguardando sua autorização">
+          <p className="mt-4 mb-1 flex items-baseline justify-between gap-4 text-[0.9375rem] text-tinta-2">
+            <span>{contagem(aguardando.quantidade, "pagamento", "pagamentos")} aguardando</span>
+            <span className="whitespace-nowrap text-[1.125rem] font-semibold tabular-nums text-tinta">
+              <Valor valor={aguardando.total} />
+            </span>
+          </p>
           <ul>
-            {aprovados.map((item) => (
-              <LinhaAprovado key={item.id} item={item} />
+            {aguardando.itens.map((x) => (
+              <LinhaAguardando key={x.item.id} p={x} hoje={hojeEfetivo} />
             ))}
           </ul>
-        </Secao>
+        </section>
       )}
     </>
   );

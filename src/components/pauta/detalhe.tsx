@@ -7,6 +7,7 @@ import type { ItemEdicao } from "@/lib/edicao/itens";
 import { dataCurta, etapasTexto } from "@/lib/formato";
 import { textoSemPrazo } from "@/lib/sem-prazo";
 import { mensagemItem, primeiroNome } from "@/lib/whatsapp";
+import { AutorizarPagamento } from "./autorizar-pagamento";
 import { ContatoWhatsapp } from "./contato-whatsapp";
 import { PillStatus } from "./pill-status";
 import { Valor } from "./valor";
@@ -65,7 +66,7 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
             <DrawerHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="rotulo-tipo">{pagamento ? "Pagamento para aprovação" : `${item.tipo} · ${item.dono}`}</p>
+                  <p className="rotulo-tipo">{pagamento ? "Pagamento para autorização" : `${item.tipo} · ${item.dono}`}</p>
                   <DrawerTitle className="titulo-jornal mt-1.5 text-[1.625rem] leading-[1.15]">{item.nome}</DrawerTitle>
                 </div>
                 <DrawerClose asChild>
@@ -86,6 +87,12 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                   numero={gestor.whatsapp}
                   mensagem={mensagemItem(item, primeiroNome(item.dono))}
                 />
+              </div>
+            )}
+
+            {pagamento && item.categoria === "aberto" && (
+              <div className="px-5 pb-3">
+                <AutorizarPagamento key={item.id} item={item} aoAutorizar={() => onAberto(false)} />
               </div>
             )}
 
@@ -112,6 +119,8 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
                 </Campo>
               )}
               {item.motivoAprovacao && <Campo rotulo="Aprovação">{item.motivoAprovacao}</Campo>}
+              {item.autorizadoPor && <Campo rotulo="Autorizado por">{item.autorizadoPor}</Campo>}
+              {item.autorizadoEm && <Campo rotulo="Autorizado em">{dataCurta(item.autorizadoEm)}</Campo>}
               {item.etapas && (
                 <Campo rotulo="Etapas">
                   <div

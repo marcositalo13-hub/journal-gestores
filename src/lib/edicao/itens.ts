@@ -28,6 +28,10 @@ export interface ItemJornal {
   valor?: number;
   /** só pagamentos: por que o diretor aprova ("Acima de R$ 100 mil" | "Área subordinada"); ausente se o item não tem valor */
   motivoAprovacao?: string;
+  /** só pagamentos: nome do leitor que autorizou (coluna "Autorizado por") */
+  autorizadoPor?: string;
+  /** só pagamentos: YYYY-MM-DD (coluna "Autorizado em") */
+  autorizadoEm?: string;
   observacao?: string;
   recorrencia?: string;
   chave?: string;
@@ -58,7 +62,7 @@ export function categoriaDoStatus(status: string | null, tipo: TipoQuadro, cfg: 
   if (mesmoRotulo(s, t.status_concluido)) return "concluido";
   if (t.status_travado && mesmoRotulo(s, t.status_travado)) return "travado";
   if (mesmoRotulo(s, t.status_cancelado)) return "cancelado";
-  return "aberto"; // Aguardando aprovação / Não iniciado / Em andamento / sem status
+  return "aberto"; // Aguardando autorização / Não iniciado / Em andamento / sem status
 }
 
 function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro): TipoItem {
@@ -74,10 +78,10 @@ export const SEM_AREA = "Sem área";
  * O item entra na edição?
  * por_mes: ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro.
  * por_area: ocorrências e únicos dos grupos de área e de finalizadas (regras nunca).
- * lista (Pagamentos): tudo o que ainda não foi para o grupo de finalizados.
+ * lista (Pagamentos): todos os grupos (o histórico de autorizados inclui os já finalizados).
  */
 function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
-  if (it.lista) return !it.lista.finalizada;
+  if (it.lista) return true;
   if (it.porArea) return it.porArea.classe !== "regra" && (it.porArea.areaGrupo !== null || it.porArea.finalizada);
   if (it.noCadastro) return parseFrequencia(it.recorrencia) === "nao_recorrente"; // regras recorrentes já têm ocorrências
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
@@ -121,6 +125,8 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         categoria: categoriaDoStatus(it.status, q.tipo, cfg),
         ...(typeof valor === "number" ? { valor } : {}),
         ...(q.tipo === "pagamentos" && typeof valor === "number" ? { motivoAprovacao: motivoAprovacao(valor, cfg) } : {}),
+        ...(q.tipo === "pagamentos" && txt(it.valores["Autorizado por"]?.text) ? { autorizadoPor: txt(it.valores["Autorizado por"]?.text) } : {}),
+        ...(q.tipo === "pagamentos" && it.valores["Autorizado em"]?.date ? { autorizadoEm: it.valores["Autorizado em"]!.date! } : {}),
         ...(txt(it.valores[tcfg.campo_motivo]?.text) ? { observacao: txt(it.valores[tcfg.campo_motivo]?.text) } : {}),
         ...(txt(it.recorrencia) ? { recorrencia: txt(it.recorrencia) } : {}),
         ...(txt(it.chave) ? { chave: txt(it.chave) } : {}),

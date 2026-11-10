@@ -35,8 +35,6 @@ export interface Abas {
 export interface PagamentosConfig {
   /** valor (R$) a partir do qual o pagamento exige a aprovação do diretor ("Acima de R$ 100 mil"); abaixo, "Área subordinada" */
   aprovacao_diretor_a_partir_de: number;
-  /** "Aprovados recentemente": aprovados (atualizados) nos últimos N dias */
-  aprovados_recentes_dias: number;
 }
 
 export interface Urgencia {
@@ -286,9 +284,6 @@ export function validarConfig(c: unknown): JornalConfig {
   else {
     if (typeof pg.aprovacao_diretor_a_partir_de !== "number" || !Number.isFinite(pg.aprovacao_diretor_a_partir_de) || pg.aprovacao_diretor_a_partir_de < 0) {
       erros.push(`pagamentos.aprovacao_diretor_a_partir_de deve ser número >= 0`);
-    }
-    if (typeof pg.aprovados_recentes_dias !== "number" || !Number.isInteger(pg.aprovados_recentes_dias) || pg.aprovados_recentes_dias < 1) {
-      erros.push(`pagamentos.aprovados_recentes_dias deve ser número inteiro >= 1`);
     }
   }
   const nt = (o.notificacoes ?? {}) as Record<string, unknown>;

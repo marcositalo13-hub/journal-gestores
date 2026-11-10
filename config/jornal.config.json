@@ -27,12 +27,12 @@
   "formato_grupo_mes": "{Mes} {AAAA}",
   "tipos_de_quadro": {
     "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Observação":"text","Chave":"text","Área":"dropdown"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","status_inicial":"Não iniciado","status_regra":"Regra recorrente","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"},
-    "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Valor (R$)":"numbers","Vencimento":"date","Status":"status","Observação":"text"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Aprovado","status_cancelado":"Cancelado","status_inicial":"Aguardando aprovação","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"}
+    "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Valor (R$)":"numbers","Vencimento":"date","Status":"status","Observação":"text","Autorizado por":"text","Autorizado em":"date"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Autorizado","status_cancelado":"Cancelado","status_inicial":"Aguardando autorização","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"}
   },
   "empate_dia_util": "anterior",
   "considerar_facultativos_como_nao_util": true,
   "abas": {"pagamentos": false},
-  "pagamentos": {"aprovacao_diretor_a_partir_de": 100000, "aprovados_recentes_dias": 7},
+  "pagamentos": {"aprovacao_diretor_a_partir_de": 100000},
   "urgencia": {"atencao_dias_uteis": 3},
   "notificacoes": {"janela_inicio": "07:00", "janela_fim": "20:00", "agrupar_minutos": 15, "novo_horas": 24},
   "manchete": {"contrato_antecedencia_dias": 10},

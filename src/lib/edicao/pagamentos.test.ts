@@ -5,7 +5,7 @@ import { fixturePagamentosAtiva } from "./data-dev";
 import { fixturePagamentos } from "./fixture-pagamentos";
 import type { ItemEdicao, ItemJornal } from "./itens";
 import { montarEdicao } from "./montar";
-import { montarPagamentos, motivoAprovacao, MOTIVO_AREA, rotuloVencimento, textoLimite } from "./pagamentos";
+import { agruparAutorizados, montarPagamentos, motivoAprovacao, MOTIVO_AREA, rotuloVencimento, textoLimite } from "./pagamentos";
 import { nivelUrgencia } from "./urgencia";
 
 const cfg = getConfig();
@@ -21,7 +21,7 @@ const pag = (o: Omit<Partial<ItemJornal>, "data"> & { data: string | null; atual
     tipoQuadro: "pagamentos" as const,
     dono: "Egídio",
     tipo: "Pagamento" as const,
-    status: "Aguardando aprovação",
+    status: "Aguardando autorização",
     categoria: "aberto" as const,
     valor: 1000,
     updatedAt: atualizadoEm ?? "2026-11-05T15:00:00Z",
@@ -29,7 +29,7 @@ const pag = (o: Omit<Partial<ItemJornal>, "data"> & { data: string | null; atual
   };
   return data === null ? { ...base, data: null, motivo: "sem_prazo" } : { ...base, data };
 };
-const mp = (itens: ItemEdicao[], hoje = HOJE) => montarPagamentos(itens, hoje, cfg);
+const mp = (itens: ItemEdicao[], hoje = HOJE) => montarPagamentos(itens, hoje);
 
 describe("motivoAprovacao (limite no config)", () => {
   it("99999,99 → Área subordinada; 100000 → Acima de R$ 100 mil (limite inclusivo)", () => {
@@ -41,7 +41,7 @@ describe("motivoAprovacao (limite no config)", () => {
     expect(motivoAprovacao(0, cfg)).toBe("Área subordinada");
   });
   it("o texto vem do limite do config, não de um número escrito no código", () => {
-    const outro = validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: 250000, aprovados_recentes_dias: 7 } });
+    const outro = validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: 250000 } });
     expect(motivoAprovacao(249999.99, outro)).toBe("Área subordinada");
     expect(motivoAprovacao(250000, outro)).toBe("Acima de R$ 250 mil");
     expect(textoLimite(100000)).toBe("R$ 100 mil");
@@ -85,17 +85,17 @@ describe("Aguardando sua aprovação", () => {
       pag({ data: "2026-11-12", valor: 0.1 }),
       pag({ data: "2026-11-13", valor: 0.2 }),
       pag({ data: "2026-11-14", valor: undefined }),
-      pag({ data: "2026-11-15", valor: 5000, categoria: "concluido", status: "Aprovado" }),
+      pag({ data: "2026-11-15", valor: 5000, categoria: "concluido", status: "Autorizado" }),
       pag({ data: "2026-11-16", valor: 7000, categoria: "cancelado", status: "Cancelado" }),
     ]).aguardando;
     expect(a.quantidade).toBe(3);
     expect(a.total).toBe(0.3);
   });
 
-  it("vazio: nenhum aguardando (a página mostra 'Nenhum pagamento aguardando aprovação.')", () => {
+  it("vazio: nenhum aguardando (a página mostra 'Nenhum pagamento aguardando autorização.')", () => {
     const p = mp([]);
     expect(p.aguardando).toEqual({ itens: [], quantidade: 0, total: 0 });
-    expect(p.aprovados).toEqual([]);
+    expect(p.autorizados).toEqual([]);
     expect(mp([pag({ data: "2026-11-01", categoria: "concluido" })]).aguardando.quantidade).toBe(0);
   });
 
@@ -114,20 +114,30 @@ describe("Aguardando sua aprovação", () => {
   });
 });
 
-describe("Aprovados recentemente (últimos 7 dias, pela última atualização em São Paulo)", () => {
-  const apr = (nome: string, atualizadoEm: string) => pag({ nome, data: "2026-11-20", categoria: "concluido", status: "Aprovado", atualizadoEm });
+describe("Autorizados: agrupados pelo mês de 'Autorizado em'", () => {
+  const aut = (nome: string, autorizadoEm?: string, o: Partial<ItemJornal> = {}) =>
+    pag({ nome, data: "2026-11-20", categoria: "concluido", status: "Autorizado", autorizadoPor: "Egídio", ...(autorizadoEm ? { autorizadoEm } : {}), ...o });
 
-  it("limite: 02/11 (hoje − 7) entra; 01/11 não; o mais recente primeiro", () => {
-    const a = mp([apr("limite", "2026-11-02T15:00:00Z"), apr("fora", "2026-11-01T15:00:00Z"), apr("ontem", "2026-11-08T15:00:00Z"), apr("hoje", "2026-11-09T15:00:00Z")]).aprovados;
-    expect(a.map((i) => i.nome)).toEqual(["hoje", "ontem", "limite"]);
+  it("meses do mais recente ao mais antigo; dentro do mês, a autorização mais recente primeiro (empate: nome)", () => {
+    const g = agruparAutorizados([aut("B out", "2026-10-03"), aut("nov 2", "2026-11-02"), aut("A out", "2026-10-03"), aut("nov 9", "2026-11-09"), aut("dez/25", "2025-12-31")]);
+    expect(g.map((m) => [m.chave, m.rotulo, m.itens.map((i) => i.nome)])).toEqual([
+      ["2026-11", "Novembro de 2026", ["nov 9", "nov 2"]],
+      ["2026-10", "Outubro de 2026", ["A out", "B out"]],
+      ["2025-12", "Dezembro de 2025", ["dez/25"]],
+    ]);
   });
-  it("usa a data de São Paulo (02h UTC ainda é o dia anterior)", () => {
-    expect(mp([apr("virada", "2026-11-03T02:00:00Z")]).aprovados).toHaveLength(1); // 02/11 23h em SP, dentro
-    expect(mp([apr("fora", "2026-11-02T02:00:00Z")]).aprovados).toHaveLength(0); // 01/11 23h em SP, fora
+
+  it("sem 'Autorizado em' (autorizado direto no monday) vai para o último grupo", () => {
+    const g = agruparAutorizados([aut("sem data"), aut("com data", "2026-01-15")]);
+    expect(g.map((m) => [m.chave, m.rotulo])).toEqual([
+      ["2026-01", "Janeiro de 2026"],
+      ["sem-data", "Sem data de autorização"],
+    ]);
   });
-  it("cancelados e aguardando nunca entram", () => {
-    const a = mp([pag({ data: "2026-11-20", categoria: "cancelado", atualizadoEm: "2026-11-08T15:00:00Z" }), pag({ data: "2026-11-20", atualizadoEm: "2026-11-08T15:00:00Z" })]).aprovados;
-    expect(a).toEqual([]);
+
+  it("montarPagamentos: só Autorizado (categoria concluído), de qualquer grupo; cancelados e aguardando nunca", () => {
+    const p = mp([aut("ok", "2026-11-05"), pag({ data: "2026-11-20", categoria: "cancelado" }), pag({ data: "2026-11-20" })]);
+    expect(p.autorizados.flatMap((m) => m.itens.map((i) => i.nome))).toEqual(["ok"]);
   });
 });
 
@@ -194,10 +204,11 @@ describe("fixture de desenvolvimento (?fixture=pagamentos)", () => {
     expect(fixturePagamentosAtiva("pagamentos", "production")).toBe(false);
     expect(fixturePagamentosAtiva("outra", "development")).toBe(false);
   });
-  it("cobre o cenário da aba: vencidos, hoje, amanhã, sem vencimento, aprovados recentes e antigos, cancelado", () => {
-    const p = montarPagamentos(fixturePagamentos(HOJE), HOJE, cfg);
+  it("cobre o cenário da aba: vencidos, hoje, amanhã, sem vencimento, autorizados em meses diferentes, cancelado", () => {
+    const p = montarPagamentos(fixturePagamentos(HOJE), HOJE);
     expect(p.aguardando.itens.map((x) => x.rotulo)).toEqual(["Venceu há 9 dias", "Venceu há 1 dia", "Vence hoje", "Amanhã", "Em 5 dias", "Em 33 dias", "Sem vencimento"]);
-    expect(p.aprovados.map((i) => i.nome)).toEqual(["[EXEMPLO] Energia elétrica (aprovada)", "[EXEMPLO] Honorários contábeis (aprovados)"]);
+    expect(p.autorizados.map((m) => m.chave)).toEqual(["2026-11", "2026-09", "sem-data"]);
+    expect(p.autorizados[0].itens.map((i) => i.nome)).toEqual(["[EXEMPLO] Energia elétrica", "[EXEMPLO] Honorários contábeis"]);
     expect(JSON.stringify(fixturePagamentos(HOJE))).not.toMatch(/Cancelado.*"categoria":"aberto"/);
   });
   it("itens da fixture usam o mesmo motivo de aprovação do config (99999,99 → Área subordinada)", () => {

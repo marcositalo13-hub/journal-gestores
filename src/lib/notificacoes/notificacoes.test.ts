@@ -401,8 +401,7 @@ describe("aba Pagamentos oculta", () => {
   });
   it("a config valida abas e pagamentos; a chave multiseguros não existe mais", () => {
     expect(() => validarConfig({ ...raw, abas: { pagamentos: "não" } })).toThrow(/abas\.pagamentos/);
-    expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: -1, aprovados_recentes_dias: 7 } })).toThrow(/aprovacao_diretor_a_partir_de/);
-    expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: 1, aprovados_recentes_dias: 0 } })).toThrow(/aprovados_recentes_dias/);
+    expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: -1 } })).toThrow(/aprovacao_diretor_a_partir_de/);
     expect("multiseguros" in raw).toBe(false);
   });
 });

@@ -61,13 +61,14 @@ describe("montarItensJornal — quais itens entram", () => {
 
 describe("categoria e tipo", () => {
   it("mapeia os rótulos de status por tipo de quadro", () => {
-    expect(categoriaDoStatus("Aprovado", "pagamentos")).toBe("concluido");
+    expect(categoriaDoStatus("Autorizado", "pagamentos")).toBe("concluido");
+    expect(categoriaDoStatus("Aprovado", "pagamentos")).toBe("aberto"); // rótulo antigo do quadro: não conta como autorizado
     expect(categoriaDoStatus("Cancelado", "pagamentos")).toBe("cancelado");
-    expect(categoriaDoStatus("Aguardando aprovação", "pagamentos")).toBe("aberto");
+    expect(categoriaDoStatus("Aguardando autorização", "pagamentos")).toBe("aberto");
     expect(categoriaDoStatus(null, "pagamentos")).toBe("aberto");
     expect(categoriaDoStatus("Travado", "pagamentos")).toBe("aberto"); // pagamentos não têm status travado
     expect(categoriaDoStatus("Concluído", "atividades")).toBe("concluido");
-    expect(categoriaDoStatus("Aprovado", "atividades")).toBe("aberto"); // "Aprovado" não é o concluído de atividades
+    expect(categoriaDoStatus("Autorizado", "atividades")).toBe("aberto"); // "Autorizado" não é o concluído de atividades
     expect(categoriaDoStatus("Travado", "atividades")).toBe("travado");
     expect(categoriaDoStatus("Cancelado", "atividades")).toBe("cancelado");
     for (const s of ["Previsto", "Não iniciado", "Em andamento", null]) expect(categoriaDoStatus(s, "atividades")).toBe("aberto");
@@ -90,7 +91,7 @@ describe("campos copiados", () => {
     const [i] = itensDe([
       quadro("pagamentos", [
         item({
-          status: "Aprovado",
+          status: "Autorizado",
           recorrencia: "Mensal",
           chave: "1:2026-10-10",
           valores: {
@@ -105,7 +106,7 @@ describe("campos copiados", () => {
       tipoQuadro: "pagamentos",
       dono: "Egídio", // pagamentos são do diretor
       data: "2026-10-10",
-      status: "Aprovado",
+      status: "Autorizado",
       categoria: "concluido",
       valor: 80000,
       motivoAprovacao: "Área subordinada",

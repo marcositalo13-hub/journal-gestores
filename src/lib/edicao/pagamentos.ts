@@ -1,6 +1,7 @@
-// Visão da aba Pagamentos: pagamentos que esperam a aprovação do diretor. Pura: tudo entra por argumento.
-// Categorias (config): "Aguardando aprovação" = aberto, "Aprovado" = concluído, "Cancelado" = cancelado.
-import { diasEntre, hoje as hojeSP, somarDias, type DataISO } from "../calendario";
+// Visão da aba Pagamentos: pagamentos que esperam a autorização do diretor e o histórico dos autorizados.
+// Pura: tudo entra por argumento.
+// Categorias (config): "Aguardando autorização" = aberto, "Autorizado" = concluído, "Cancelado" = cancelado.
+import { diasEntre, nomeDoMes, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
 import { moeda } from "../formato";
 import type { ItemEdicao } from "./itens";
@@ -47,15 +48,42 @@ export interface Pagamentos {
     /** soma dos valores (item sem Valor conta zero) */
     total: number;
   };
-  /** aprovados (e atualizados) nos últimos `aprovados_recentes_dias` dias, o mais recente primeiro */
-  aprovados: ItemEdicao[];
+  /** autorizados (dos dois grupos do quadro), por mês de "Autorizado em", o mais recente primeiro */
+  autorizados: MesAutorizados[];
+}
+
+export interface MesAutorizados {
+  /** "2026-11"; "sem-data" para autorizados sem "Autorizado em" (sempre por último) */
+  chave: string;
+  /** "Novembro de 2026" | "Sem data de autorização" */
+  rotulo: string;
+  itens: ItemEdicao[];
+}
+
+export const SEM_DATA_AUTORIZACAO = "sem-data";
+
+/** Autorizados agrupados pelo mês de "Autorizado em" (mais recente primeiro); dentro do mês, o mais recente primeiro. */
+export function agruparAutorizados(itens: ItemEdicao[]): MesAutorizados[] {
+  const grupos = new Map<string, ItemEdicao[]>();
+  for (const i of itens) {
+    const k = i.autorizadoEm ? i.autorizadoEm.slice(0, 7) : SEM_DATA_AUTORIZACAO;
+    grupos.set(k, [...(grupos.get(k) ?? []), i]);
+  }
+  const ordem = (k: string) => (k === SEM_DATA_AUTORIZACAO ? "" : k);
+  return [...grupos]
+    .sort(([a], [b]) => ordem(b).localeCompare(ordem(a)))
+    .map(([chave, doMes]) => ({
+      chave,
+      rotulo: chave === SEM_DATA_AUTORIZACAO ? "Sem data de autorização" : `${nomeDoMes(Number(chave.slice(5, 7)))} de ${chave.slice(0, 4)}`,
+      itens: doMes.sort((a, b) => (b.autorizadoEm ?? "").localeCompare(a.autorizadoEm ?? "") || porNome(a, b)),
+    }));
 }
 
 const centavos = (n: number) => Math.round(n * 100) / 100;
 const porNome = (a: ItemEdicao, b: ItemEdicao) => a.nome.localeCompare(b.nome, "pt-BR");
 
 /** Só considera itens de quadros de pagamentos; cancelados nunca aparecem. */
-export function montarPagamentos(itensBrutos: ItemEdicao[], hoje: DataISO, cfg: JornalConfig): Pagamentos {
+export function montarPagamentos(itensBrutos: ItemEdicao[], hoje: DataISO): Pagamentos {
   const itens = itensBrutos.filter((i) => i.tipoQuadro === "pagamentos");
 
   const aguardando = itens
@@ -66,16 +94,9 @@ export function montarPagamentos(itensBrutos: ItemEdicao[], hoje: DataISO, cfg: 
       return { item, dias, rotulo: dias === null ? "Sem vencimento" : rotuloVencimento(dias) };
     });
 
-  // Não há "data da aprovação" no quadro: vale a última atualização do item (em São Paulo).
-  const desde = somarDias(hoje, -cfg.pagamentos.aprovados_recentes_dias);
-  const quando = (i: ItemEdicao) => hojeSP(new Date(i.updatedAt), cfg);
-  const aprovados = itens
-    .filter((i) => i.categoria === "concluido" && quando(i) >= desde && quando(i) <= hoje)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || porNome(a, b));
-
   return {
     data: hoje,
     aguardando: { itens: aguardando, quantidade: aguardando.length, total: centavos(aguardando.reduce((t, p) => t + (p.item.valor ?? 0), 0)) },
-    aprovados,
+    autorizados: agruparAutorizados(itens.filter((i) => i.categoria === "concluido")),
   };
 }
