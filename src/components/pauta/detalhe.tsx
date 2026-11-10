@@ -54,16 +54,22 @@ function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   );
 }
 
+/** Toques no popover do tutorial (fora da folha, no DOM) não contam como "toque fora" e não fecham a folha. */
+function naoFecharPeloTour(e: Event) {
+  const alvo = (e as CustomEvent<{ originalEvent?: Event }>).detail?.originalEvent?.target ?? e.target;
+  if (alvo instanceof Element && alvo.closest(".driver-popover")) e.preventDefault();
+}
+
 function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao | null; aberto: boolean; onAberto: (v: boolean) => void; gestores: DiretorioGestores }) {
   const pagamento = item?.tipoQuadro === "pagamentos";
   // pagamento é do diretor: sem gestor, sem WhatsApp
   const gestor = item && !pagamento ? gestores[item.dono] : undefined;
   return (
     <Drawer open={aberto} onOpenChange={onAberto}>
-      <DrawerContent>
+      <DrawerContent onPointerDownOutside={naoFecharPeloTour} onInteractOutside={naoFecharPeloTour}>
         {item && (
           <>
-            <DrawerHeader>
+            <DrawerHeader data-tour="folha-cabecalho">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="rotulo-tipo">{pagamento ? "Pagamento para autorização" : `${item.tipo} · ${item.dono}`}</p>
@@ -79,7 +85,7 @@ function FolhaDetalhe({ item, aberto, onAberto, gestores }: { item: ItemEdicao |
             </DrawerHeader>
 
             {gestor && (
-              <div className="px-5 pb-3">
+              <div data-tour="folha-contato" className="px-5 pb-3">
                 <ContatoWhatsapp
                   key={gestor.slug}
                   slug={gestor.slug}

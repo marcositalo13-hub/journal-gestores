@@ -1,9 +1,8 @@
-// Tutorial guiado: passos, âncoras e estado (localStorage). Puro e sem imports: serve ao cliente e aos testes.
+// Tutorial guiado: um único roteiro contínuo Hoje → Pagamentos → Gestores. Puro e sem imports: serve ao cliente e aos testes.
 // Âncoras são atributos data-tour estáveis no HTML; se uma não existir na tela (ex.: sem itens hoje), o passo vira um
-// popover centralizado, sem destaque.
+// popover centralizado, sem destaque (nunca aponta para o nada).
 
-export type Tour = "hoje" | "pagamentos" | "gestores";
-export const TOURS: readonly Tour[] = ["hoje", "pagamentos", "gestores"];
+export type Capitulo = "hoje" | "pagamentos" | "gestores";
 
 export type Ancora =
   | "manchete"
@@ -17,113 +16,129 @@ export type Ancora =
   | "pag-aguardando"
   | "pag-autorizados"
   | "gestores-grade"
-  | "gestor-selo";
+  | "gestor-selo"
+  | "folha-contato"
+  | "folha-cabecalho";
 
-export interface PassoTour {
-  ancora: Ancora;
+/**
+ * normal: "Próximo" avança. interativo: o destaque é tocável (abre a folha) e avança sozinho; sem "Próximo".
+ * folha: destaca a folha de detalhes; "Próximo" fecha a folha e segue. final: mensagem centralizada.
+ */
+export type TipoPasso = "normal" | "interativo" | "folha" | "final";
+
+export interface Passo {
+  id: string;
+  capitulo: Capitulo;
+  /** âncoras tentadas em ordem; nenhuma na tela → popover centralizado */
+  ancoras: Ancora[];
   titulo: string;
   texto: string;
   /** lado preferido do popover em relação ao destaque (o driver ajusta se não couber) */
   lado: "top" | "bottom";
+  tipo: TipoPasso;
+  rota: "/" | "/pagamentos" | "/gestores";
+  /** posição no capítulo (1…total) */
+  ordem: number;
+  total: number;
+  /** rótulo do botão principal; null no passo interativo (sem botão) */
+  botao: string | null;
 }
 
-/** Valor guardado quando o tour (ou a oferta) já foi visto. */
-export const VISTO = "visto";
-export const chaveTour = (t: Tour) => `pauta:tour:${t}`;
+export const ROTA: Record<Capitulo, Passo["rota"]> = { hoje: "/", pagamentos: "/pagamentos", gestores: "/gestores" };
+const NOME: Record<Capitulo, string> = { hoje: "Hoje", pagamentos: "Pagamentos", gestores: "Gestores" };
 
-export const PASSOS: Record<Tour, PassoTour[]> = {
-  hoje: [
-    { ancora: "manchete", titulo: "Manchete", texto: "Aqui fica o item mais urgente do dia.", lado: "bottom" },
-    { ancora: "legenda", titulo: "Legenda", texto: "As cores mostram a urgência: preto atrasado, vermelho hoje ou travado, amarelo nos próximos dias, verde em dia.", lado: "top" },
-    { ancora: "dias", titulo: "Dias", texto: "Toque num dia para ver o que vence nele.", lado: "bottom" },
-    { ancora: "primeira-linha", titulo: "Itens", texto: "Toque em qualquer item para ver os detalhes e falar com o responsável pelo WhatsApp.", lado: "bottom" },
-    { ancora: "olho", titulo: "Valores", texto: "Oculta os valores quando você estiver em reunião.", lado: "bottom" },
-    { ancora: "abas", titulo: "Abas", texto: "Pagamentos traz o que depende da sua autorização. Gestores mostra cada área.", lado: "top" },
-  ],
-  pagamentos: [
-    { ancora: "pag-aguardando", titulo: "Aguardando", texto: "Pagamentos que aguardam a sua autorização. Toque em um para autorizar.", lado: "bottom" },
-    { ancora: "pag-autorizados", titulo: "Autorizados", texto: "Tudo o que você já autorizou, com busca.", lado: "bottom" },
-  ],
-  gestores: [
-    { ancora: "gestores-grade", titulo: "Gestores", texto: "Toque num gestor para ver as atividades da área.", lado: "top" },
-    { ancora: "gestor-selo", titulo: "Selo", texto: "O selo mostra pendências: a cor indica a mais grave.", lado: "bottom" },
-  ],
-};
+type Base = Pick<Passo, "id" | "ancoras" | "titulo" | "texto" | "lado"> & { tipo?: TipoPasso };
 
-/** Texto do passo "abas" quando a aba Pagamentos está oculta (não cita o que o leitor não vê). */
-const TEXTO_ABAS_SEM_PAGAMENTOS = "Gestores mostra cada área.";
+const HOJE: Base[] = [
+  { id: "manchete", ancoras: ["manchete"], titulo: "Manchete", texto: "Aqui fica o item mais urgente do dia.", lado: "bottom" },
+  { id: "legenda", ancoras: ["legenda"], titulo: "Legenda", texto: "As cores mostram a urgência: preto atrasado, vermelho hoje ou travado, amarelo nos próximos dias, verde em dia.", lado: "top" },
+  { id: "dias", ancoras: ["dias"], titulo: "Dias", texto: "Toque num dia para ver o que vence nele.", lado: "bottom" },
+  { id: "primeira-linha", ancoras: ["primeira-linha"], titulo: "Itens", texto: "Toque neste item.", lado: "bottom", tipo: "interativo" },
+  { id: "folha", ancoras: ["folha-contato", "folha-cabecalho"], titulo: "Detalhes", texto: "Aqui ficam os detalhes e o contato com o responsável.", lado: "top", tipo: "folha" },
+  { id: "olho", ancoras: ["olho"], titulo: "Valores", texto: "Oculta os valores quando você estiver em reunião.", lado: "bottom" },
+];
+const PAGAMENTOS: Base[] = [
+  { id: "pag-aguardando", ancoras: ["pag-aguardando"], titulo: "Aguardando", texto: "Pagamentos que aguardam a sua autorização. Toque em um para autorizar.", lado: "bottom" },
+  { id: "pag-autorizados", ancoras: ["pag-autorizados"], titulo: "Autorizados", texto: "Tudo o que você já autorizou, com busca.", lado: "bottom" },
+];
+const GESTORES: Base[] = [
+  { id: "gestores-grade", ancoras: ["gestores-grade"], titulo: "Gestores", texto: "Toque num gestor para ver as atividades da área.", lado: "top" },
+  { id: "gestor-selo", ancoras: ["gestor-selo"], titulo: "Selo", texto: "O selo mostra pendências: a cor indica a mais grave.", lado: "bottom" },
+  { id: "final", ancoras: [], titulo: "Pronto", texto: "Pronto. Para rever, toque em Tutorial no fim da tela Hoje.", lado: "bottom", tipo: "final" },
+];
+
+/**
+ * O roteiro inteiro, em ordem. Com a aba Pagamentos oculta pela config, o capítulo dela é pulado (e o último passo de Hoje
+ * leva direto a Gestores). O botão principal do último passo de cada capítulo é "Ir para …"; o do final é "Pronto".
+ */
+export function construirRoteiro(comPagamentos: boolean): Passo[] {
+  const capitulos: [Capitulo, Base[]][] = [["hoje", HOJE], ["pagamentos", PAGAMENTOS], ["gestores", GESTORES]];
+  const ativos = capitulos.filter(([c]) => c !== "pagamentos" || comPagamentos);
+  return ativos.flatMap(([capitulo, base], ci) => {
+    const proximo = ativos[ci + 1]?.[0];
+    return base.map((b, i): Passo => {
+      const tipo = b.tipo ?? "normal";
+      const ultimo = i === base.length - 1;
+      const botao = tipo === "interativo" ? null : tipo === "final" ? "Pronto" : ultimo && proximo ? `Ir para ${NOME[proximo]}` : "Próximo";
+      return { ...b, tipo, capitulo, rota: ROTA[capitulo], ordem: i + 1, total: base.length, botao };
+    });
+  });
+}
+
+/** "Hoje · 3 de 6" */
+export const rotuloProgresso = (p: Passo) => `${NOME[p.capitulo]} · ${p.ordem} de ${p.total}`;
+
+/** "Voltar" some no primeiro passo de cada capítulo (não se volta de uma aba para a outra). */
+export const mostrarVoltar = (p: Passo) => p.ordem > 1;
+
+/** Para onde "Voltar" leva: o passo anterior, pulando a folha (já fechada; volta-se ao item que a abriu). null = sem volta. */
+export function indiceAnterior(roteiro: Passo[], i: number): number | null {
+  const p = roteiro[i];
+  if (!p || !mostrarVoltar(p)) return null;
+  let j = i - 1;
+  while (j >= 0 && roteiro[j].tipo === "folha") j--;
+  return j >= 0 && roteiro[j].capitulo === p.capitulo ? j : null;
+}
 
 export const seletorDaAncora = (a: Ancora) => `[data-tour="${a}"]`;
 
-export interface PassoMontado extends PassoTour {
-  /** seletor CSS do destaque; null = âncora ausente, popover centralizado sem destaque */
-  seletor: string | null;
+/** Seletor do destaque do passo: a primeira âncora presente na tela, ou null (popover centralizado, sem destaque). */
+export function resolverSeletor(p: Pick<Passo, "ancoras">, existe: (a: Ancora) => boolean): string | null {
+  const a = p.ancoras.find(existe);
+  return a ? seletorDaAncora(a) : null;
 }
 
-/** Lista de passos do tour; `existe` diz se a âncora está na tela agora. Âncora ausente → passo sem destaque (nunca some). */
-export function construirPassos(tour: Tour, existe: (a: Ancora) => boolean): PassoMontado[] {
-  return PASSOS[tour].map((p) => ({
-    ...p,
-    texto: p.ancora === "abas" && !existe("aba-pagamentos") ? TEXTO_ABAS_SEM_PAGAMENTOS : p.texto,
-    seletor: existe(p.ancora) ? seletorDaAncora(p.ancora) : null,
-  }));
-}
+// ---------- oferta do primeiro acesso (único estado guardado) ----------
 
-// ---------- estado ----------
+/** Valor guardado quando a oferta do tutorial já foi vista (aceita ou recusada). */
+export const VISTO = "visto";
+export const CHAVE_OFERTA = "pauta:tour:hoje";
 
 /** O mínimo de Storage de que o tutorial precisa (facilita o teste). */
 export interface Armazem {
   getItem(k: string): string | null;
   setItem(k: string, v: string): void;
-  removeItem(k: string): void;
 }
 
-export type EstadoTour = Record<Tour, boolean>;
-
-/** Quais tours já foram vistos. Armazenamento ilegível: null (o tutorial então não se oferece sozinho). */
-export function lerEstado(a: Armazem | null): EstadoTour | null {
+/** A oferta já foi vista? null = armazenamento ilegível (então o tutorial não se oferece sozinho). */
+export function ofertaVista(a: Armazem | null): boolean | null {
   if (!a) return null;
   try {
-    return { hoje: a.getItem(chaveTour("hoje")) === VISTO, pagamentos: a.getItem(chaveTour("pagamentos")) === VISTO, gestores: a.getItem(chaveTour("gestores")) === VISTO };
+    return a.getItem(CHAVE_OFERTA) === VISTO;
   } catch {
     return null;
   }
 }
 
-export function marcarVisto(a: Armazem | null, ...tours: Tour[]): void {
+export function marcarOfertaVista(a: Armazem | null): void {
   try {
-    for (const t of tours) a?.setItem(chaveTour(t), VISTO);
+    a?.setItem(CHAVE_OFERTA, VISTO);
   } catch {
     // armazenamento bloqueado: vale só nesta visita
   }
 }
 
-/** "Tutorial": reabre o tour de Hoje e volta a valer os tours de cada aba (Hoje segue marcado como visto). */
-export function reiniciar(a: Armazem | null): void {
-  try {
-    a?.removeItem(chaveTour("pagamentos"));
-    a?.removeItem(chaveTour("gestores"));
-  } catch {
-    // idem
-  }
-}
-
-/** Recusar a oferta ("Agora não") marca tudo como visto: nada de tour por conta própria; o link "Tutorial" segue valendo. */
-export function recusarOferta(a: Armazem | null): void {
-  marcarVisto(a, ...TOURS);
-}
-
-export type Acao = "oferecer" | "pagamentos" | "gestores" | null;
-
-/**
- * O que fazer ao abrir uma tela, agora. Nada enquanto a abertura animada roda, enquanto o cartão de notificações está na
- * tela ou enquanto há uma folha aberta. A oferta só aparece em Hoje; o tour de cada aba, só depois de o de Hoje ter sido visto.
- */
-export function decidir(o: { rota: string; estado: EstadoTour | null; ocupado: boolean }): Acao {
-  if (!o.estado || o.ocupado) return null;
-  if (o.rota === "/") return o.estado.hoje ? null : "oferecer";
-  if (!o.estado.hoje) return null;
-  if (o.rota === "/pagamentos" || o.rota.startsWith("/pagamentos/")) return o.estado.pagamentos ? null : "pagamentos";
-  if (o.rota === "/gestores") return o.estado.gestores ? null : "gestores"; // só a grade; o caderno de um gestor não tem tour
-  return null;
+/** Oferecer só em Hoje, uma vez, com o armazenamento legível e nada na frente (abertura animada, cartão, folha). */
+export function deveOferecer(o: { rota: string; vista: boolean | null; ocupado: boolean }): boolean {
+  return o.rota === "/" && o.vista === false && !o.ocupado;
 }

@@ -1,12 +1,16 @@
 "use client";
 
-import { driver, type DriveStep } from "driver.js";
+import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { construirPassos, decidir, lerEstado, marcarVisto, recusarOferta, reiniciar, seletorDaAncora, type Ancora, type Armazem, type Tour } from "@/lib/tour";
+import { construirRoteiro, deveOferecer, indiceAnterior, marcarOfertaVista, ofertaVista, resolverSeletor, rotuloProgresso, seletorDaAncora, type Ancora, type Armazem, type Passo } from "@/lib/tour";
 
 const EVENTO = "pauta:tutorial";
+const ESPERA_PAGINA_MS = 4000;
+const ESPERA_FOLHA_MS = 3000;
+const ESPERA_ANCORA_MS = 1500;
+const TEXTO_SEM_ITEM = "Quando houver itens na tela, toque em um deles para ver os detalhes.";
 
 function armazem(): Armazem | null {
   try {
@@ -17,60 +21,247 @@ function armazem(): Armazem | null {
 }
 
 const reduzido = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const existe = (a: Ancora) => document.querySelector(seletorDaAncora(a)) !== null;
 
-/** A primeira linha de item da tela recebe a âncora na hora (as linhas são de vários componentes; só a primeira importa). */
+/** Espera `pronto()` ficar verdadeiro (verifica a cada 100 ms), no máximo `ms`. */
+async function esperar(pronto: () => boolean, ms: number): Promise<boolean> {
+  const fim = Date.now() + ms;
+  while (Date.now() < fim) {
+    if (pronto()) return true;
+    await dormir(100);
+  }
+  return pronto();
+}
+
+/** A primeira linha de item da tela recebe a âncora na hora (as linhas vêm de vários componentes; só a primeira importa). */
 function marcarPrimeiraLinha() {
   document.querySelectorAll('[data-tour="primeira-linha"]').forEach((e) => e.removeAttribute("data-tour"));
   document.querySelector<HTMLElement>("main section[aria-labelledby] ul > li")?.setAttribute("data-tour", "primeira-linha");
 }
 
-const existe = (a: Ancora) => document.querySelector(seletorDaAncora(a)) !== null;
+// data-state="closed" é a folha em animação de saída: já não conta como aberta
+const folhaAberta = () => document.querySelector('[data-slot="drawer-content"][data-state="open"]') !== null;
+function fecharFolha() {
+  document.querySelector<HTMLElement>('[data-slot="drawer-content"] [aria-label="Fechar"]')?.click();
+}
 
-let ativo: ReturnType<typeof driver> | null = null;
+// ---------- sessão do tour (módulo: sobrevive à troca de aba, porque o layout não desmonta) ----------
 
-/** Roda o tour: spotlight sobre a tela escurecida; âncora ausente vira popover centralizado. */
-function iniciarTour(tour: Tour) {
-  ativo?.destroy();
-  if (tour === "hoje") marcarPrimeiraLinha();
+interface Sessao {
+  roteiro: Passo[];
+  i: number;
+  d: Driver | null;
+  /** o passo atual está sem destaque (âncora ausente): popover centralizado */
+  semDestaque: boolean;
+  /** a folha foi aberta pelo tour (fechar ao encerrar) */
+  abriuFolha: boolean;
+  /** navegação feita pelo próprio tour (a troca manual da aba pelo usuário encerra o tour) */
+  navegando: boolean;
+  /** invalida esperas pendentes quando o passo muda ou o tour acaba */
+  token: number;
+  /** limpeza do passo atual (toque no destaque, temporizadores) */
+  limpar: (() => void)[];
+  /** ouvintes da sessão inteira (ESC, gesto de voltar) */
+  globais: (() => void)[];
+}
+
+let sessao: Sessao | null = null;
+let roteador: { push: (rota: string) => void } | null = null;
+
+const ativa = (s: Sessao, t: number) => sessao === s && s.token === t;
+
+function limparPasso(s: Sessao) {
+  s.limpar.splice(0).forEach((f) => f());
+}
+
+/** Encerra sem erro, em qualquer estado: Pular, Pronto, ESC, gesto de voltar ou troca manual de aba. */
+function encerrar() {
+  const s = sessao;
+  if (!s) return;
+  sessao = null;
+  s.token++;
+  limparPasso(s);
+  s.globais.splice(0).forEach((f) => f());
+  try {
+    s.d?.destroy();
+  } catch {
+    // já destruído
+  }
+  if (s.abriuFolha && folhaAberta()) fecharFolha();
+}
+
+function avancar() {
+  const s = sessao;
+  if (!s) return;
+  const p = s.roteiro[s.i];
+  if (p.tipo === "final") {
+    encerrar();
+    if (window.location.pathname !== "/") roteador?.push("/");
+    return;
+  }
+  void (async () => {
+    const t = ++s.token;
+    // passo interativo sem item na tela: não há folha para mostrar, pula direto
+    const pulo = p.tipo === "interativo" ? 2 : 1;
+    if (p.tipo === "folha" && folhaAberta()) {
+      fecharFolha();
+      await esperar(() => !folhaAberta(), 1500);
+      if (!ativa(s, t)) return;
+    }
+    void ir(s, s.i + pulo);
+  })();
+}
+
+function voltar() {
+  const s = sessao;
+  if (!s) return;
+  const j = indiceAnterior(s.roteiro, s.i);
+  if (j === null) return;
+  void (async () => {
+    const t = ++s.token;
+    if (s.roteiro[s.i].tipo === "folha" && folhaAberta()) {
+      fecharFolha();
+      await esperar(() => !folhaAberta(), 1500);
+      if (!ativa(s, t)) return;
+    }
+    void ir(s, j);
+  })();
+}
+
+/** Rodapé numa linha: progresso à esquerda; Pular, Voltar e o botão principal à direita (largura do conteúdo). */
+function montarRodape(footer: HTMLElement) {
+  const s = sessao;
+  if (!s) return;
+  const p = s.roteiro[s.i];
+  const botao = (classe: string, texto: string, aoClicar: () => void) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = classe;
+    b.textContent = texto;
+    b.addEventListener("click", aoClicar);
+    return b;
+  };
+  const progresso = document.createElement("span");
+  progresso.className = "tour-progresso";
+  progresso.textContent = rotuloProgresso(p);
+  const acoes = document.createElement("div");
+  acoes.className = "tour-acoes";
+  acoes.append(botao("tour-pular", "Pular", encerrar));
+  if (indiceAnterior(s.roteiro, s.i) !== null) acoes.append(botao("tour-voltar", "Voltar", voltar));
+  // sem o item para tocar, o passo interativo vira um aviso com "Próximo"
+  const rotulo = p.botao ?? (p.tipo === "interativo" && s.semDestaque ? "Próximo" : null);
+  if (rotulo) acoes.append(botao("tour-primario", rotulo, avancar));
+  footer.replaceChildren(progresso, acoes);
+  footer.style.display = "flex";
+}
+
+function criarDriver(): Driver {
   const sem = reduzido();
-  const passos: DriveStep[] = construirPassos(tour, existe).map((p) => ({
-    ...(p.seletor ? { element: p.seletor } : {}),
-    popover: { title: p.titulo, description: p.texto, ...(p.seletor ? { side: p.lado, align: "center" as const } : {}) },
-  }));
-  const tinta = getComputedStyle(document.documentElement).getPropertyValue("--tinta").trim() || "#16181d";
-  const d = driver({
-    steps: passos,
+  return driver({
     animate: !sem,
     smoothScroll: !sem,
-    overlayColor: tinta,
+    overlayColor: getComputedStyle(document.documentElement).getPropertyValue("--tinta").trim() || "#16181d",
     overlayOpacity: 0.6,
     stagePadding: 6,
     stageRadius: 12,
     popoverOffset: 12,
-    allowClose: true,
-    showProgress: true,
-    progressText: "{{current}} de {{total}}",
-    prevBtnText: "Voltar",
-    nextBtnText: "Próximo",
-    doneBtnText: "Concluir",
-    closeBtnLabel: "Fechar",
+    // só "Pular" e "Pronto" encerram: toque no escurecido, ESC do driver e setas do driver ficam desligados
+    allowClose: false,
+    overlayClickBehavior: "none",
+    allowKeyboardControl: false,
     popoverClass: "tour-pauta",
-    onPopoverRender: (popover, { driver: dr }) => {
-      popover.closeButton.style.display = "none"; // "Pular" faz esse papel, em texto
-      popover.footer.querySelector(".tour-pular")?.remove();
-      const pular = document.createElement("button");
-      pular.type = "button";
-      pular.className = "tour-pular";
-      pular.textContent = "Pular";
-      pular.addEventListener("click", () => dr.destroy());
-      popover.footer.appendChild(pular);
-    },
-    onDestroyed: () => {
-      if (ativo === d) ativo = null;
+    onPopoverRender: (popover) => {
+      popover.closeButton.style.display = "none";
+      montarRodape(popover.footer);
     },
   });
-  ativo = d;
-  d.drive();
+}
+
+/** Mostra o passo `i`: navega se for de outra aba, espera a âncora (até 4 s) e destaca; sem âncora, popover centralizado. */
+async function ir(s: Sessao, i: number) {
+  const p = s.roteiro[i];
+  if (!p) {
+    encerrar();
+    return;
+  }
+  const t = ++s.token;
+  limparPasso(s);
+  s.i = i;
+
+  if (window.location.pathname !== p.rota) {
+    s.d?.destroy();
+    s.d = null;
+    s.navegando = true;
+    roteador?.push(p.rota);
+    await esperar(() => window.location.pathname === p.rota && document.querySelector("main h2") !== null, ESPERA_PAGINA_MS);
+    if (!ativa(s, t)) return;
+    s.navegando = false;
+  }
+  // a tela pode ainda estar chegando (a edição do monday vem em seguida): dá um respiro curto antes de desistir da âncora
+  const achar = () => {
+    if (p.id === "primeira-linha") marcarPrimeiraLinha();
+    return resolverSeletor(p, existe);
+  };
+  if (p.ancoras.length > 0 && !achar()) {
+    await esperar(() => achar() !== null, ESPERA_ANCORA_MS);
+    if (!ativa(s, t)) return;
+  }
+  const seletor = achar();
+  const el = seletor ? document.querySelector<HTMLElement>(seletor) : null;
+
+  s.semDestaque = !el;
+  s.d ??= criarDriver();
+  s.d.highlight({
+    ...(el ? { element: el } : {}),
+    popover: {
+      title: p.titulo,
+      description: p.tipo === "interativo" && !el ? TEXTO_SEM_ITEM : p.texto,
+      showButtons: [],
+      showProgress: true,
+      progressText: rotuloProgresso(p),
+      ...(el ? { side: p.lado, align: "center" as const } : {}),
+    },
+  });
+
+  // o driver posiciona o popover antes de a rolagem/animação da tela assentar; um "resize" depois refaz a posição certa
+  for (const ms of [150, 600]) {
+    const id = setTimeout(() => ativa(s, t) && window.dispatchEvent(new Event("resize")), ms);
+    s.limpar.push(() => clearTimeout(id));
+  }
+
+  // passo interativo: o toque no próprio destaque abre a folha e o tour segue sozinho para ela
+  if (p.tipo === "interativo" && el) {
+    const aoTocar = () => {
+      void (async () => {
+        const tt = ++s.token;
+        const abriu = await esperar(() => document.querySelector('[data-slot="drawer-content"] [data-tour]') !== null, ESPERA_FOLHA_MS);
+        if (!ativa(s, tt)) return;
+        if (abriu) await dormir(reduzido() ? 0 : 420); // a folha termina de subir antes de ser destacada
+        if (!ativa(s, tt)) return;
+        s.abriuFolha = abriu;
+        void ir(s, abriu ? i + 1 : i + 2);
+      })();
+    };
+    el.addEventListener("click", aoTocar, { once: true, capture: true });
+    s.limpar.push(() => el.removeEventListener("click", aoTocar, { capture: true }));
+  }
+}
+
+function iniciar(comPagamentos: boolean) {
+  encerrar();
+  const s: Sessao = { roteiro: construirRoteiro(comPagamentos), i: 0, d: null, semDestaque: false, abriuFolha: false, navegando: false, token: 0, limpar: [], globais: [] };
+  sessao = s;
+  const aoTecla = (e: KeyboardEvent) => {
+    if (e.key === "Escape") encerrar();
+  };
+  window.addEventListener("keydown", aoTecla);
+  window.addEventListener("popstate", encerrar); // gesto/botão de voltar
+  s.globais.push(() => {
+    window.removeEventListener("keydown", aoTecla);
+    window.removeEventListener("popstate", encerrar);
+  });
+  void ir(s, 0);
 }
 
 /** Há algo na frente que não deve ser coberto: abertura animada, cartão de notificações ou folha aberta. */
@@ -107,45 +298,49 @@ function aposAbertura(agir: () => void): () => void {
 }
 
 /**
- * Orquestra o tutorial: oferta ao primeiro acesso (cartão inferior), tour de cada aba na primeira vez que ela abre e o
- * reinício pelo link "Tutorial". Nunca por cima da abertura animada nem do cartão de notificações.
+ * Tutorial único e contínuo (Hoje → Pagamentos → Gestores). Aqui: a oferta do primeiro acesso (cartão inferior), o início
+ * pelo link "Tutorial" e o encerramento quando o usuário troca de aba por conta própria.
  */
-export function Tutorial() {
+export function Tutorial({ comPagamentos }: { comPagamentos: boolean }) {
   const rota = usePathname();
+  const router = useRouter();
   const [ofertaEm, setOfertaEm] = useState<string | null>(null); // rota em que a oferta foi aberta (trocar de aba a esconde)
 
   useEffect(() => {
+    roteador = router;
+  }, [router]);
+
+  // troca de aba que não foi do tour (ou de rota por qualquer outro motivo): termina sem alarde
+  useEffect(() => {
+    const s = sessao;
+    if (s && !s.navegando && rota !== s.roteiro[s.i].rota) encerrar();
+  }, [rota]);
+
+  useEffect(() => {
     return aposAbertura(() => {
-      const acao = decidir({ rota, estado: lerEstado(armazem()), ocupado: ocupado() });
-      if (acao === "oferecer") setOfertaEm(rota);
-      else if (acao) {
-        marcarVisto(armazem(), acao); // marcado ao começar: recarregar no meio não repete
-        iniciarTour(acao);
-      }
+      if (deveOferecer({ rota, vista: ofertaVista(armazem()), ocupado: ocupado() })) setOfertaEm(rota);
     });
   }, [rota]);
 
   useEffect(() => {
     const aoPedir = () => {
-      if (window.location.pathname !== "/") return;
-      reiniciar(armazem());
       setOfertaEm(null);
-      iniciarTour("hoje");
+      iniciar(comPagamentos);
     };
     window.addEventListener(EVENTO, aoPedir);
     return () => {
       window.removeEventListener(EVENTO, aoPedir);
-      ativo?.destroy();
+      encerrar();
     };
-  }, []);
+  }, [comPagamentos]);
 
   const comecar = useCallback(() => {
-    marcarVisto(armazem(), "hoje");
+    marcarOfertaVista(armazem());
     setOfertaEm(null);
-    iniciarTour("hoje");
-  }, []);
+    iniciar(comPagamentos);
+  }, [comPagamentos]);
   const agoraNao = useCallback(() => {
-    recusarOferta(armazem());
+    marcarOfertaVista(armazem());
     setOfertaEm(null);
   }, []);
 
@@ -165,7 +360,7 @@ export function Tutorial() {
   );
 }
 
-/** Link discreto "Tutorial", ao lado de "Legenda": reabre o tour de Hoje. */
+/** Link discreto "Tutorial", ao lado de "Legenda": inicia o tour. */
 export function BotaoTutorial() {
   return (
     <button

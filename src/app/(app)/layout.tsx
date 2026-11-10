@@ -66,7 +66,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
         <BarraAbas comPagamentos={getConfig().abas.pagamentos} />
         <AberturaDiaria />
-        <Tutorial />
+        <Tutorial comPagamentos={getConfig().abas.pagamentos} />
         <Toaster position="top-center" />
       </div>
     </ProvedorDetalhe>
