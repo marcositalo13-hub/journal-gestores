@@ -9,7 +9,8 @@ import { LinhaItem } from "@/components/pauta/secao";
 import { SeletorPagamentos } from "@/components/pauta/seletor-pagamentos";
 import { Valor } from "@/components/pauta/valor";
 import { dataPorExtenso, hoje } from "@/lib/calendario";
-import { getConfig } from "@/lib/config";
+import { leitorDaSessao } from "@/lib/auth";
+import { acessoPagamentos, getConfig } from "@/lib/config";
 import { dataDeTeste, fixturePagamentosAtiva } from "@/lib/edicao/data-dev";
 import { fixturePagamentos } from "@/lib/edicao/fixture-pagamentos";
 import { itemDaUrl } from "@/lib/edicao/item-da-url";
@@ -44,8 +45,10 @@ function LinhaAguardando({ p, hoje: dia }: { p: PagamentoAguardando; hoje: DataI
 
 export default async function PaginaPagamentos({ searchParams }: PageProps<"/pagamentos">) {
   const sp = await searchParams;
-  // Aba oculta (abas.pagamentos = false): 404 para todos.
-  if (!getConfig().abas.pagamentos) notFound();
+  // Aba oculta (abas.pagamentos = false): abre por URL só para os e-mails de abas.previa_para (com aviso); os demais veem 404.
+  const leitor = await leitorDaSessao();
+  const { pode, oculta } = acessoPagamentos(leitor?.email);
+  if (!pode) notFound();
 
   const hojeEfetivo = dataDeTeste(sp.data, process.env.NODE_ENV) ?? hoje();
   // ?fixture=pagamentos: dados de exemplo, SÓ fora de produção (o quadro real pode estar vazio).
@@ -70,6 +73,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
   return (
     <>
       {itemAberto && <AbrirItem item={itemAberto} />}
+      {oculta && <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">Em construção — oculta para o diretor</p>}
       {(exemplo || sp.data) && (
         <p className="mb-5 rounded-lg bg-papel-alt px-3 py-2 text-[0.9375rem] text-tinta-2">
           {exemplo ? "Dados de exemplo" : "Simulando"} — {dataPorExtenso(hojeEfetivo)} (somente em desenvolvimento).

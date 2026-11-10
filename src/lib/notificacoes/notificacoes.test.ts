@@ -11,7 +11,7 @@ import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFi
 import { tokenConfere, tratarWebhook } from "./webhook";
 
 const cfgOculta = getConfig(); // abas.pagamentos = false (estado atual)
-const cfg = validarConfig({ ...raw, abas: { pagamentos: true } }); // link do pagamento testado com a aba visível
+const cfg = validarConfig({ ...raw, abas: { pagamentos: true, previa_para: [] } }); // link do pagamento testado com a aba visível
 const RAIZ = resolve(__dirname, "../../..");
 // terça, 10/11/2026, 10:00 em São Paulo
 const AGORA = new Date("2026-11-10T13:00:00Z");
@@ -400,7 +400,7 @@ describe("aba Pagamentos oculta", () => {
     expect(av(criado, pag())[0].url.startsWith("/pagamentos")).toBe(true);
   });
   it("a config valida abas e pagamentos; a chave multiseguros não existe mais", () => {
-    expect(() => validarConfig({ ...raw, abas: { pagamentos: "não" } })).toThrow(/abas\.pagamentos/);
+    expect(() => validarConfig({ ...raw, abas: { pagamentos: "não", previa_para: [] } })).toThrow(/abas\.pagamentos/);
     expect(() => validarConfig({ ...raw, pagamentos: { aprovacao_diretor_a_partir_de: -1 } })).toThrow(/aprovacao_diretor_a_partir_de/);
     expect("multiseguros" in raw).toBe(false);
   });

@@ -31,7 +31,7 @@
   },
   "empate_dia_util": "anterior",
   "considerar_facultativos_como_nao_util": true,
-  "abas": {"pagamentos": false},
+  "abas": {"pagamentos": false, "previa_para": ["marcos.porto@brbseguros.com.br"]},
   "pagamentos": {"aprovacao_diretor_a_partir_de": 100000},
   "urgencia": {"atencao_dias_uteis": 3},
   "notificacoes": {"janela_inicio": "07:00", "janela_fim": "20:00", "agrupar_minutos": 15, "novo_horas": 24},

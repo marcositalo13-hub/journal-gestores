@@ -28,8 +28,10 @@ export interface Notificacoes {
 }
 
 export interface Abas {
-  /** false: a aba Pagamentos some para todos e /pagamentos responde 404 */
+  /** false: a aba Pagamentos some da barra para todos e /pagamentos responde 404 (exceto para os e-mails de previa_para) */
   pagamentos: boolean;
+  /** e-mails (sem diferenciar maiúsculas) que abrem /pagamentos por URL enquanto a aba está oculta, com o aviso "Em construção" */
+  previa_para: string[];
 }
 
 export interface PagamentosConfig {
@@ -278,7 +280,12 @@ export function validarConfig(c: unknown): JornalConfig {
   }
   const ab = (o.abas ?? {}) as Record<string, unknown>;
   if (typeof o.abas !== "object" || o.abas === null) erros.push(`"abas" deve ser objeto`);
-  else if (typeof ab.pagamentos !== "boolean") erros.push(`abas.pagamentos deve ser true ou false`);
+  else {
+    if (typeof ab.pagamentos !== "boolean") erros.push(`abas.pagamentos deve ser true ou false`);
+    if (!Array.isArray(ab.previa_para) || !ab.previa_para.every((e) => typeof e === "string" && e.includes("@"))) {
+      erros.push(`abas.previa_para deve ser lista de e-mails`);
+    }
+  }
   const pg = (o.pagamentos ?? {}) as Record<string, unknown>;
   if (typeof o.pagamentos !== "object" || o.pagamentos === null) erros.push(`"pagamentos" deve ser objeto`);
   else {
@@ -336,6 +343,17 @@ export function leitorPorEmail(email: string | null | undefined, cfg: JornalConf
   if (!email) return null;
   const e = email.trim().toLowerCase();
   return cfg.leitores.find((l) => l.email.trim().toLowerCase() === e) ?? null;
+}
+
+/**
+ * Quem abre /pagamentos: com a aba visível, qualquer leitor (a página já fica atrás do login); com ela oculta,
+ * só os e-mails de abas.previa_para (sem diferenciar maiúsculas). `oculta` diz se vale mostrar o aviso "Em construção".
+ */
+export function acessoPagamentos(email: string | null | undefined, cfg: JornalConfig = getConfig()): { pode: boolean; oculta: boolean } {
+  const oculta = !cfg.abas.pagamentos;
+  if (!oculta) return { pode: true, oculta };
+  const e = (email ?? "").trim().toLowerCase();
+  return { pode: e !== "" && cfg.abas.previa_para.some((p) => p.trim().toLowerCase() === e), oculta };
 }
 
 /** O e-mail está na lista de leitores? */
