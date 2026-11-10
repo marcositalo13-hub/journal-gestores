@@ -41,7 +41,7 @@ export function SeletorPagamentos({ atual: doServidor }: { atual: VisaoPagamento
         {OPCOES.map((o, i) => {
           const marcado = i === indice;
           return (
-            <li key={o.valor}>
+            <li key={o.valor} data-tour={o.valor === "autorizados" ? "pag-autorizados" : undefined}>
               <button
                 type="button"
                 onClick={() => ir(o.valor)}

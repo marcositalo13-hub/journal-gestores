@@ -70,7 +70,7 @@ export function CartaoNotificacoes() {
   }
 
   return (
-    <section aria-label="Notificações" className="mb-5 rounded-xl border border-borda bg-papel-alt px-4 py-3 text-[0.9375rem] leading-snug text-tinta-2">
+    <section aria-label="Notificações" data-cartao-notificacoes className="mb-5 rounded-xl border border-borda bg-papel-alt px-4 py-3 text-[0.9375rem] leading-snug text-tinta-2">
       {estado === "instalar" && <p>Para receber avisos, adicione A Pauta à Tela de Início (Compartilhar → Adicionar à Tela de Início).</p>}
       {estado === "ativar" && (
         <div className="flex items-center justify-between gap-3">

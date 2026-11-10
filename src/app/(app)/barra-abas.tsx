@@ -22,7 +22,7 @@ export function BarraAbas({ comPagamentos }: { comPagamentos: boolean }) {
   const indice = Math.max(0, ABAS.findIndex((a) => ativa(pathname, a.href)));
 
   return (
-    <nav aria-label="Seções" className="barra-abas fixed inset-x-0 bottom-0 z-10">
+    <nav aria-label="Seções" data-tour="abas" className="barra-abas fixed inset-x-0 bottom-0 z-10">
       <div className="relative mx-auto max-w-[640px]">
         <span
           aria-hidden
@@ -36,6 +36,7 @@ export function BarraAbas({ comPagamentos }: { comPagamentos: boolean }) {
               <li key={href} className="flex-1">
                 <Link
                   href={href}
+                  data-tour={href === "/pagamentos" ? "aba-pagamentos" : href === "/gestores" ? "aba-gestores" : undefined}
                   aria-current={atual ? "page" : undefined}
                   className={cn(
                     "aba flex h-full min-h-11 items-center justify-center font-jornal text-[1.125rem] tracking-[-0.005em]",

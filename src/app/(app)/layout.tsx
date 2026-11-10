@@ -7,6 +7,7 @@ import { slugDe } from "@/lib/edicao/caderno";
 import { dataCurta } from "@/lib/formato";
 import { criarClienteServidor } from "@/lib/supabase/server";
 import { AberturaDiaria } from "@/components/pauta/abertura-diaria";
+import { Tutorial } from "@/components/pauta/tutorial";
 import { AlternarValores } from "@/components/pauta/alternar-valores";
 import { CabecalhoApp } from "@/components/pauta/cabecalho-app";
 import { Atualizado } from "@/components/pauta/atualizado";
@@ -65,6 +66,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
         <BarraAbas comPagamentos={getConfig().abas.pagamentos} />
         <AberturaDiaria />
+        <Tutorial />
         <Toaster position="top-center" />
       </div>
     </ProvedorDetalhe>

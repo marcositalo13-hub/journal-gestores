@@ -4,14 +4,15 @@ import { X } from "lucide-react";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import type { Nivel } from "@/lib/niveis";
 import { COR_BARRA } from "./nivel";
+import { BotaoTutorial } from "./tutorial";
 
 /** As regras chegam prontas do servidor (geradas dos valores da config; o config não vai para o navegador). */
 export function LegendaNiveis({ regras }: { regras: { nivel: Nivel; titulo: string; regra: string }[] }) {
   return (
-    <div className="mt-10 flex justify-center">
+    <div className="mt-10 flex justify-center gap-2">
       <Drawer>
         <DrawerTrigger asChild>
-          <button type="button" className="pressionavel min-h-11 px-3 text-[0.9375rem] text-tinta-2 underline decoration-borda decoration-1 underline-offset-4">
+          <button type="button" data-tour="legenda" className="pressionavel min-h-11 px-3 text-[0.9375rem] text-tinta-2 underline decoration-borda decoration-1 underline-offset-4">
             Legenda
           </button>
         </DrawerTrigger>
@@ -42,6 +43,7 @@ export function LegendaNiveis({ regras }: { regras: { nivel: Nivel; titulo: stri
           </ul>
         </DrawerContent>
       </Drawer>
+      <BotaoTutorial />
     </div>
   );
 }

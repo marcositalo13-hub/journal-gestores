@@ -33,6 +33,7 @@ export function AlternarValores() {
     <button
       type="button"
       onClick={alternar}
+      data-tour="olho"
       aria-pressed={oculto}
       aria-label={oculto ? "Mostrar valores" : "Ocultar valores"}
       className="pressionavel flex min-h-11 min-w-11 items-center justify-center text-tinta-2"

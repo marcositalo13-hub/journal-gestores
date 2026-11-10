@@ -95,7 +95,7 @@ export default async function PaginaPagamentos({ searchParams }: PageProps<"/pag
               <Valor valor={aguardando.total} />
             </span>
           </p>
-          <ul>
+          <ul data-tour="pag-aguardando">
             {aguardando.itens.map((x) => (
               <LinhaAguardando key={x.item.id} p={x} hoje={hojeEfetivo} />
             ))}

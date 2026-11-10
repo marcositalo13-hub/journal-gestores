@@ -36,7 +36,7 @@ export function NavegadorDias({ dias, selecionado }: { dias: DiaNavegador[]; sel
   }
 
   return (
-    <nav aria-label="Dias" className="relative -mt-2 mb-6 border-b border-borda">
+    <nav aria-label="Dias" data-tour="dias" className="relative -mt-2 mb-6 border-b border-borda">
       <ul className="grid grid-cols-7">
         {dias.map((d, i) => {
           const marcado = i === indice;

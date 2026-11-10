@@ -32,6 +32,7 @@ export function CelulaGestor({
         {selo?.tipo === "pendencias" && (
           <span
             role="img"
+            data-tour="gestor-selo"
             aria-label={selo.rotulo}
             className={cn(
               "absolute -right-1 -top-1 flex h-[1.375rem] min-w-[1.375rem] items-center justify-center rounded-full px-1 text-[0.75rem] font-bold leading-none ring-2 ring-papel",
@@ -42,7 +43,7 @@ export function CelulaGestor({
             <span aria-hidden>{selo.n}</span>
           </span>
         )}
-        {selo?.tipo === "atencao" && <span role="img" aria-label={selo.rotulo} className={cn("absolute right-0 top-0 size-3.5 rounded-full ring-2 ring-papel", COR_BARRA[selo.nivel])} />}
+        {selo?.tipo === "atencao" && <span role="img" data-tour="gestor-selo" aria-label={selo.rotulo} className={cn("absolute right-0 top-0 size-3.5 rounded-full ring-2 ring-papel", COR_BARRA[selo.nivel])} />}
       </span>
       <span className="block min-w-0">
         <span className={cn("block font-semibold leading-tight", grande ? "text-[1.0625rem]" : "text-[0.9375rem]")}>{primeiroEUltimo(nome)}</span>

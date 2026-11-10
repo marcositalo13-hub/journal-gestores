@@ -57,7 +57,7 @@ export default async function PaginaGestores({ searchParams }: PageProps<"/gesto
       <h2 className="titulo-jornal text-[1.75rem]">Gestores</h2>
 
       <div className="mt-5 flex justify-center">{celula(topo, true)}</div>
-      <div className="mt-4 grid grid-cols-3 gap-x-2 gap-y-4">{demais.map((n) => celula(n))}</div>
+      <div data-tour="gestores-grade" className="mt-4 grid grid-cols-3 gap-x-2 gap-y-4">{demais.map((n) => celula(n))}</div>
 
       {fora.length > 0 && (
         <section aria-labelledby="s-fora" className="mt-8 border-t border-borda pt-5">
