@@ -2,7 +2,8 @@
 import { diasEntre, ehDiaUtil, proximoDiaUtil, rotuloDia, somarDias, type DataISO } from "../calendario";
 import type { JornalConfig } from "../config";
 import type { ItemEdicao, ItemJornal, ItemSemPrazo } from "./itens";
-import { piorNivelAberto, type Nivel } from "./urgencia";
+import { ORDEM_NIVEL } from "../niveis";
+import { nivelUrgencia, piorNivelAberto, type Nivel } from "./urgencia";
 
 export interface ItemPendencia {
   item: ItemJornal;
@@ -33,12 +34,13 @@ export interface DiaSemana {
   itens: ItemJornal[];
 }
 
-export type RegraManchete = "contrato" | "pendencia" | "travado";
+export type RegraManchete = "pendencia" | "travado" | "contrato" | "hoje" | "proximo";
 
 export interface MancheteEdicao {
   item: ItemEdicao;
   motivo: string;
   regra: RegraManchete;
+  nivel: Exclude<Nivel, "verde">;
   /** chamada factual acima do título: "Contrato · vence hoje", "Atrasado há 3 dias", "Travado" */
   kicker: string;
 }
@@ -115,29 +117,42 @@ export function descendentes(nome: string, cfg: JornalConfig): string[] {
   return out;
 }
 
-function escolherManchete(itens: ItemJornal[], pendencias: ItemPendencia[], travados: ItemTravado[], hoje: DataISO, cfg: JornalConfig): MancheteEdicao | null {
-  const m = cfg.manchete;
-  const naoConcluido = (i: ItemJornal) => i.categoria === "aberto" || i.categoria === "travado";
+/** Kicker de quem não é atrasado nem travado nem contrato: "Vence hoje" / "Prazo amanhã" / "Prazo em N dias". */
+export function kickerPrazo(dias: number): string {
+  return dias <= 0 ? "Vence hoje" : dias === 1 ? "Prazo amanhã" : `Prazo em ${dias} dias`;
+}
 
-  // (a) contrato próximo → o mais próximo (pagamentos têm aba própria e não concorrem à manchete)
-  const limCon = somarDias(hoje, m.contrato_antecedencia_dias);
-  const contratos = itens.filter((i) => i.tipo === "Contrato" && naoConcluido(i) && i.data >= hoje && i.data <= limCon).sort(porDataENome);
-  if (contratos[0]) {
-    const dias = diasEntre(hoje, contratos[0].data);
-    return { item: contratos[0], regra: "contrato", motivo: `Contrato com prazo ${quando(dias)}.`, kicker: kickerContrato(dias) };
-  }
+/**
+ * Manchete = o item aberto com o pior nível de urgência (preto > vermelho > amarelo). Desempate dentro do nível:
+ * Contrato primeiro; depois a data mais antiga (preto) ou a mais próxima (demais); depois o nome.
+ * Itens sem prazo só concorrem se estiverem travados. Pagamentos não entram (já fora de `itens`).
+ */
+function escolherManchete(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: DataISO, cfg: JornalConfig): MancheteEdicao | null {
+  const candidatos = [...itens, ...semPrazo.filter((i) => i.categoria === "travado")]
+    .filter(aberto)
+    .map((item) => ({ item, nivel: nivelUrgencia(item, hoje, cfg) }))
+    .filter((c): c is { item: ItemEdicao; nivel: Exclude<Nivel, "verde"> } => c.nivel !== null && c.nivel !== "verde");
+  if (!candidatos.length) return null;
 
-  // (b) pendência mais antiga
-  if (pendencias[0]) {
-    const { item, diasAtraso } = pendencias[0];
-    return { item, regra: "pendencia", motivo: `Atrasado há ${diasAtraso} ${diasAtraso === 1 ? "dia" : "dias"}.`, kicker: kickerPendencia(diasAtraso) };
-  }
+  const ordem = (n: Nivel) => ORDEM_NIVEL.indexOf(n);
+  candidatos.sort(
+    (a, b) =>
+      ordem(a.nivel) - ordem(b.nivel) ||
+      Number(b.item.tipo === "Contrato") - Number(a.item.tipo === "Contrato") ||
+      (a.item.data === null ? 1 : 0) - (b.item.data === null ? 1 : 0) ||
+      (a.item.data ?? "").localeCompare(b.item.data ?? "") || // preto: mais antiga; demais: mais próxima (ambos crescentes)
+      a.item.nome.localeCompare(b.item.nome, "pt-BR"),
+  );
+  const { item, nivel } = candidatos[0];
 
-  // (c) qualquer travado
-  if (travados[0]) {
-    return { item: travados[0].item, regra: "travado", motivo: travados[0].motivo ?? "Item travado, sem motivo informado.", kicker: "Travado" };
+  if (nivel === "preto" && item.data !== null) {
+    const dias = diasEntre(item.data, hoje);
+    return { item, nivel, regra: "pendencia", motivo: `Atrasado há ${dias} ${dias === 1 ? "dia" : "dias"}.`, kicker: kickerPendencia(dias) };
   }
-  return null;
+  if (item.categoria === "travado") return { item, nivel, regra: "travado", motivo: item.observacao ?? "Item travado, sem motivo informado.", kicker: "Travado" };
+  const dias = diasEntre(hoje, item.data as DataISO);
+  if (item.tipo === "Contrato") return { item, nivel, regra: "contrato", motivo: `Contrato com prazo ${quando(dias)}.`, kicker: kickerContrato(dias) };
+  return { item, nivel, regra: dias <= 0 ? "hoje" : "proximo", motivo: `Prazo ${quando(dias)}.`, kicker: kickerPrazo(dias) };
 }
 
 function resumirGestores(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: DataISO, cfg: JornalConfig): ResumoGestor[] {
@@ -217,7 +232,7 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
     semPrazo,
     avisoNaoUtil,
     semana,
-    manchete: escolherManchete(itens, pendencias, travados, hoje, cfg),
+    manchete: escolherManchete(itens, semPrazo, hoje, cfg),
     gestores: resumirGestores(itens, semPrazo, hoje, cfg),
   };
 }

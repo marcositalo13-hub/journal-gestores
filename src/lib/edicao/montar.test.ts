@@ -137,71 +137,102 @@ describe("semana", () => {
   });
 });
 
-describe("manchete", () => {
+describe("manchete pela urgência", () => {
   const pag = (valor: number, data: string, o: Partial<ItemJornal> = {}) => mk({ tipo: "Pagamento", tipoQuadro: "pagamentos", valor, data, ...o });
   const con = (data: string, o: Partial<ItemJornal> = {}) => mk({ tipo: "Contrato", data, ...o });
-  const pend = () => mk({ data: "2026-10-05", nome: "Pendência" });
-  const trav = () => mk({ data: "2026-10-30", categoria: "travado", observacao: "Sem verba" });
+  const atras = (data: string, o: Partial<ItemJornal> = {}) => mk({ data, ...o });
+  const manchete = (itens: ItemJornal[], hoje = "2026-10-06", sem: ItemSemPrazo[] = []) => montarEdicao(itens, hoje, cfg, GERADO, sem).manchete;
 
-  it("precedência contrato > pendência > travado > null (pagamentos não concorrem)", () => {
-    const p = pag(150_000, "2026-10-08");
-    const c = con("2026-10-10");
-    const pe = pend();
-    const t = trav();
-    expect(ed([t, pe, c, p]).manchete).toMatchObject({ regra: "contrato", item: { id: c.id } });
-    expect(ed([t, pe, c]).manchete).toMatchObject({ regra: "contrato", item: { id: c.id } });
-    expect(ed([t, pe]).manchete).toMatchObject({ regra: "pendencia", item: { id: pe.id } });
-    expect(ed([t]).manchete).toMatchObject({ regra: "travado", item: { id: t.id }, motivo: "Sem verba" });
-    expect(ed([]).manchete).toBeNull();
+  it("um atrasado (preto) vence um contrato que vence em 2 dias (amarelo)", () => {
+    const c = con("2026-10-08");
+    const a = atras("2026-10-05", { nome: "Material Panorama" });
+    expect(manchete([c, a])).toMatchObject({ regra: "pendencia", nivel: "preto", kicker: "Atrasado há 1 dia", item: { id: a.id } });
   });
 
-  it("pagamento relevante vencendo NÃO vira manchete (regra removida): só o que sobra de atividades", () => {
-    expect(ed([pag(500_000, "2026-10-08")]).manchete).toBeNull();
-    expect(ed([pag(500_000, "2026-10-06")]).manchete).toBeNull();
-    const pe = pend();
-    expect(ed([pag(500_000, "2026-10-08"), pe]).manchete).toMatchObject({ regra: "pendencia", item: { id: pe.id } });
-    // nem um pagamento atrasado ou travado entra na manchete
-    expect(ed([pag(500_000, "2026-10-01"), pag(1, "2026-10-20", { categoria: "travado" })]).manchete).toBeNull();
+  it("preto > vermelho (hoje ou travado) > amarelo; verde nunca é manchete", () => {
+    const preto = atras("2026-10-01");
+    const hoje = atras("2026-10-06");
+    const trav = atras("2026-12-30", { categoria: "travado", observacao: "Sem verba" });
+    const amar = atras("2026-10-07");
+    const verde = atras("2026-12-01");
+    expect(manchete([amar, trav, hoje, preto, verde])?.item.id).toBe(preto.id);
+    expect(manchete([amar, trav, hoje, verde])?.nivel).toBe("vermelho");
+    expect(manchete([amar, verde])).toMatchObject({ nivel: "amarelo", item: { id: amar.id } });
+    expect(manchete([verde, atras("2026-10-01", { categoria: "concluido" })])).toBeNull();
+    expect(manchete([])).toBeNull();
   });
 
-  it("(b) contrato: janela [hoje, hoje+10]; o mais próximo; não concluído", () => {
-    expect(ed([con("2026-10-17")]).manchete).toBeNull(); // hoje+11
-    const perto = con("2026-10-08");
-    const longe = con("2026-10-16");
-    expect(ed([longe, perto]).manchete).toMatchObject({ regra: "contrato", item: { id: perto.id } });
-    expect(ed([con("2026-10-08", { categoria: "concluido" })]).manchete).toBeNull();
+  it("desempate no mesmo nível: Contrato primeiro, depois a data (preto: mais antiga; demais: mais próxima), depois o nome", () => {
+    const velha = atras("2026-09-28", { nome: "Velha" });
+    const nova = atras("2026-10-05", { nome: "Nova" });
+    const contratoAtrasado = con("2026-10-05", { nome: "Contrato atrasado" });
+    expect(manchete([nova, velha])?.item.id).toBe(velha.id); // preto: mais antiga
+    expect(manchete([velha, contratoAtrasado])?.item.id).toBe(contratoAtrasado.id); // contrato antes, mesmo mais novo
+
+    const amanha = atras("2026-10-07", { nome: "Amanhã" });
+    const depois = atras("2026-10-08", { nome: "Depois" });
+    expect(manchete([depois, amanha])?.item.id).toBe(amanha.id); // mais próxima
+    const contratoLonge = con("2026-10-09", { nome: "Contrato" });
+    expect(manchete([amanha, contratoLonge])?.item.id).toBe(contratoLonge.id); // contrato antes da data
+
+    const b = atras("2026-10-05", { nome: "Bravo" });
+    const a = atras("2026-10-05", { nome: "Alfa" });
+    expect(manchete([b, a])?.item.id).toBe(a.id); // nome
   });
 
-  it("(c) pendência mais antiga", () => {
-    const velha = mk({ data: "2026-09-28" });
-    const nova = mk({ data: "2026-10-05" });
-    expect(ed([nova, velha]).manchete).toMatchObject({ regra: "pendencia", item: { id: velha.id }, motivo: "Atrasado há 8 dias." });
+  it("um travado sem prazo concorre (vermelho); um sem prazo comum não", () => {
+    const sem = (o: Partial<ItemSemPrazo> = {}): ItemSemPrazo => ({ ...mk({ data: "2026-10-06" }), data: null, motivo: "sem_prazo", ...o }) as ItemSemPrazo;
+    expect(manchete([], "2026-10-06", [sem()])).toBeNull();
+    const t = sem({ categoria: "travado" });
+    expect(manchete([], "2026-10-06", [t])).toMatchObject({ regra: "travado", kicker: "Travado", item: { id: t.id } });
+  });
+
+  it("pagamentos nunca concorrem à manchete", () => {
+    expect(manchete([pag(500_000, "2026-10-01"), pag(1, "2026-10-20", { categoria: "travado" })])).toBeNull();
+    const a = atras("2026-10-05");
+    expect(manchete([pag(500_000, "2026-10-01"), a])?.item.id).toBe(a.id);
   });
 });
 
-describe("manchete: kicker factual", () => {
-  const con = (data: string) => mk({ tipo: "Contrato", data });
-  const kicker = (itens: ItemJornal[], hoje = "2026-10-06") => ed(itens, hoje).manchete?.kicker;
+describe("manchete: kicker factual e com a cor do nível", () => {
+  const con = (data: string, o: Partial<ItemJornal> = {}) => mk({ tipo: "Contrato", data, ...o });
+  const m = (itens: ItemJornal[], hoje = "2026-10-06") => ed(itens, hoje).manchete;
 
   it("contrato: vence hoje / prazo amanhã / prazo em N dias (dias corridos)", () => {
-    expect(kicker([con("2026-10-06")])).toBe("Contrato · vence hoje");
-    expect(kicker([con("2026-10-07")])).toBe("Contrato · prazo amanhã");
-    expect(kicker([con("2026-10-08")])).toBe("Contrato · prazo em 2 dias");
-    expect(kicker([con("2026-10-16")])).toBe("Contrato · prazo em 10 dias");
+    expect(m([con("2026-10-06")])?.kicker).toBe("Contrato · vence hoje");
+    expect(m([con("2026-10-07")])?.kicker).toBe("Contrato · prazo amanhã");
+    expect(m([con("2026-10-08")])?.kicker).toBe("Contrato · prazo em 2 dias");
+    expect(m([con("2026-10-09")])?.kicker).toBe("Contrato · prazo em 3 dias");
   });
 
-  it("pendência: Atrasado há N dia(s)", () => {
-    expect(kicker([mk({ data: "2026-10-05" })])).toBe("Atrasado há 1 dia");
-    expect(kicker([mk({ data: "2026-09-28" })])).toBe("Atrasado há 8 dias");
+  it("atrasado: Atrasado há N dia(s) (inclusive contrato); travado: Travado", () => {
+    expect(m([mk({ data: "2026-10-05" })])?.kicker).toBe("Atrasado há 1 dia");
+    expect(m([mk({ data: "2026-09-28" })])?.kicker).toBe("Atrasado há 8 dias");
+    expect(m([con("2026-10-01")])).toMatchObject({ kicker: "Atrasado há 5 dias", nivel: "preto" });
+    expect(m([mk({ data: "2026-10-30", categoria: "travado" })])).toMatchObject({ kicker: "Travado", nivel: "vermelho" });
   });
 
-  it("travado: Travado", () => {
-    expect(kicker([mk({ data: "2026-10-30", categoria: "travado" })])).toBe("Travado");
+  it("vence hoje / prazo amanhã / prazo em N dias para itens comuns", () => {
+    expect(m([mk({ data: "2026-10-06" })])).toMatchObject({ kicker: "Vence hoje", nivel: "vermelho" });
+    expect(m([mk({ data: "2026-10-07" })])).toMatchObject({ kicker: "Prazo amanhã", nivel: "amarelo" });
+    expect(m([mk({ data: "2026-10-09" })])).toMatchObject({ kicker: "Prazo em 3 dias", nivel: "amarelo" });
   });
 
   it("a expressão antiga nunca aparece", () => {
     const todos = [con("2026-10-06"), con("2026-10-07"), con("2026-10-12"), mk({ data: "2026-10-01" }), mk({ data: "2026-10-30", categoria: "travado" })];
-    for (const i of todos) expect(kicker([i])).not.toMatch(/vencendo/i);
+    for (const i of todos) expect(m([i])?.kicker ?? "").not.toMatch(/vencendo/i);
+  });
+});
+
+describe("dado real: Material Panorama DICOL Mensal · 09/11 (hoje 2026-11-10)", () => {
+  it("aparece em pendencias com 1 dia, e é a manchete (preto) à frente do contrato de 11/11", () => {
+    const panorama = mk({ nome: "Material Panorama DICOL Mensal · 09/11", dono: "João Silva", data: "2026-11-09", status: "Em andamento" });
+    const nda = mk({ nome: "Assinatura NDA Embracon", tipo: "Contrato", dono: "Solange Mata", data: "2026-11-11" });
+    const e = ed([nda, panorama], "2026-11-10");
+    expect(e.pendencias.map((p) => [p.item.nome, p.diasAtraso])).toEqual([["Material Panorama DICOL Mensal · 09/11", 1]]);
+    expect(e.manchete).toMatchObject({ kicker: "Atrasado há 1 dia", nivel: "preto", item: { id: panorama.id } });
+    // sem manchete na frente, ele segue na seção Atrasados; o contrato aparece como amarelo
+    expect(ed([nda], "2026-11-10").manchete).toMatchObject({ kicker: "Contrato · prazo amanhã", nivel: "amarelo" });
   });
 });
 
@@ -288,7 +319,7 @@ describe("pagamentos ficam fora da edição de atividades", () => {
     expect(e.travados).toEqual([]);
     expect(e.avisoNaoUtil).toBeNull();
     expect(e.semPrazo).toEqual([]);
-    expect(e.manchete).toBeNull();
+    expect(e.manchete).toMatchObject({ regra: "hoje", item: { id: a.id } }); // só a atividade de hoje concorre; nenhum pagamento
     // contagens do gestor só de atividades
     const keite = e.gestores.find((g) => g.nome === "Keite Martins")!;
     expect(keite.contagens).toEqual({ hoje: 1, atrasados: 0, travados: 0, semPrazo: 0 });

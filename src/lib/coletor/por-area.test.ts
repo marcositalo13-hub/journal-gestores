@@ -311,7 +311,7 @@ describe("edição", () => {
     ]);
     const e = montarEdicao(itens, HOJE, cfg, "x", semPrazo);
     expect(e.travados.map((t) => [t.item.dono, t.motivo])).toEqual([["Lucas Martins", "Aguardando parecer"]]);
-    expect(e.manchete).toMatchObject({ regra: "contrato", item: { id: "1" } });
+    expect(e.manchete).toMatchObject({ regra: "travado", kicker: "Travado", item: { id: "1" } });
   });
 });
 

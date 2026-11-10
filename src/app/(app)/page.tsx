@@ -8,6 +8,7 @@ import { CartaoNotificacoes, TesteNotificacao } from "@/components/pauta/notific
 import { LegendaNiveis } from "@/components/pauta/legenda-niveis";
 import { ConteudoLinha } from "@/components/pauta/linha";
 import { Manchete } from "@/components/pauta/manchete";
+import { RotuloNivel } from "@/components/pauta/nivel";
 import { LinhaItem, LinhaSemPrazo, MetaItem, RotuloItem } from "@/components/pauta/secao";
 import { NavegadorDias, type DiaNavegador } from "@/components/pauta/navegador-dias";
 import { dataPorExtenso, ehDiaUtil, tituloAvisoNaoUtil, type DataISO } from "@/lib/calendario";
@@ -17,7 +18,7 @@ import { itemDaUrl } from "@/lib/edicao/item-da-url";
 import type { DiaSemana } from "@/lib/edicao/montar";
 import { obterEdicao, obterEdicaoEm } from "@/lib/edicao/obter";
 import { nivelUrgencia, textosLegenda } from "@/lib/edicao/urgencia";
-import { contagem, dataCurta, dataTitulo, etapasTexto } from "@/lib/formato";
+import { contagem, dataTitulo, etapasTexto, haDias } from "@/lib/formato";
 
 function Secao({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
   return (
@@ -87,8 +88,17 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
   const outroDia = proximos.find((d) => d.data === params.dia) ?? null;
 
   // "Hoje" agrupado por gestor, na ordem do config (donos fora do config vêm por último).
+  // O item da manchete não se repete na própria seção.
+  const idManchete = edicao.manchete?.item.id;
+  const fora = <T extends { id: string }>(i: T) => i.id !== idManchete;
+  const atrasados = edicao.pendencias.filter((p) => fora(p.item));
+  const travados = edicao.travados.filter((t) => fora(t.item));
+  const semPrazo = edicao.semPrazo.filter(fora);
+  const hojeSemManchete = edicao.hoje.filter(fora);
+  // Se o único item de hoje é a própria manchete, a seção Hoje some (em vez de dizer "Nada vence hoje").
+  const hojeSoManchete = edicao.hoje.length > 0 && hojeSemManchete.length === 0;
   const gruposHoje = edicao.gestores
-    .map((g) => ({ nome: g.nome, itens: edicao.hoje.filter((i) => i.dono === g.nome) }))
+    .map((g) => ({ nome: g.nome, itens: hojeSemManchete.filter((i) => i.dono === g.nome) }))
     .filter((g) => g.itens.length > 0);
 
   return (
@@ -109,6 +119,24 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
         <>
           <Manchete manchete={edicao.manchete} hoje={edicao.data} />
 
+          {atrasados.length > 0 && (
+            <Secao id="s-atrasados" titulo="Atrasados">
+              <ul>
+                {atrasados.map(({ item, diasAtraso }) => (
+                  <LinhaItem key={item.id} item={item} hoje={hoje}>
+                    <ConteudoLinha
+                      item={item}
+                      mostrarTipo={false}
+                      meta={<MetaItem item={item} />}
+                      direita={<RotuloNivel nivel="preto" rotulo={haDias(diasAtraso)} />}
+                    />
+                  </LinhaItem>
+                ))}
+              </ul>
+            </Secao>
+          )}
+
+          {(gruposHoje.length > 0 || !hojeSoManchete) && (
           <Secao id="s-hoje" titulo="Hoje">
             {gruposHoje.length === 0 ? (
               <p className="py-3 text-base text-tinta-2">Nada vence hoje.</p>
@@ -134,28 +162,12 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
               ))
             )}
           </Secao>
-
-          {edicao.pendencias.length > 0 && (
-            <Secao id="s-pendencias" titulo="Pendências">
-              <ul>
-                {edicao.pendencias.map(({ item }) => (
-                  <LinhaItem key={item.id} item={item} hoje={hoje}>
-                    <ConteudoLinha
-                      item={item}
-                      mostrarTipo={false}
-                      meta={<MetaItem item={item} extras={[`prazo ${dataCurta(item.data)}`]} />}
-                      direita={<RotuloItem item={item} hoje={hoje} />}
-                    />
-                  </LinhaItem>
-                ))}
-              </ul>
-            </Secao>
           )}
 
-          {edicao.travados.length > 0 && (
+          {travados.length > 0 && (
             <Secao id="s-travados" titulo="Travados">
               <ul>
-                {edicao.travados.map(({ item, motivo }) => (
+                {travados.map(({ item, motivo }) => (
                   <LinhaItem key={item.id} item={item} hoje={hoje}>
                     <ConteudoLinha
                       item={item}
@@ -175,10 +187,10 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
             </Secao>
           )}
 
-          {edicao.semPrazo.length > 0 && (
+          {semPrazo.length > 0 && (
             <Secao id="s-sem-prazo" titulo="Sem prazo">
               <ul>
-                {edicao.semPrazo.map((item) => (
+                {semPrazo.map((item) => (
                   <LinhaSemPrazo key={item.id} item={item} hoje={hoje} />
                 ))}
               </ul>
