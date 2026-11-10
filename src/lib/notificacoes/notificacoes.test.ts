@@ -6,7 +6,7 @@ import { getConfig, validarConfig } from "../config";
 import { montarPayload, temValor } from "../push/payload";
 import { agrupar, nomeDoCorpo, planejarEnvios, textoResumo, type Pendente } from "./agrupar";
 import { dentroDaJanela, inicioDaJanelaDeHoje } from "./janela";
-import { enviarPendentes, processarEvento, resumoDaManha, type DepsNotificacoes, type ItemRelido, type RepoFila } from "./orquestrar";
+import { enviarPendentes, processarEvento, resumoDaManha, tratarEProcessar, type DepsNotificacoes, type ItemRelido, type RepoFila } from "./orquestrar";
 import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFila } from "./regras";
 import { tokenConfere, tratarWebhook } from "./webhook";
 
@@ -353,6 +353,40 @@ describe("cron de envio e resumo da manhã", () => {
       throw new Error("monday");
     };
     expect((await resumoDaManha(new Date("2026-11-10T10:00:00Z"), t.deps, cfg)).corpo).toBe("0 novidades da noite");
+  });
+});
+
+describe("webhook invalida o cache da edição", () => {
+  const S = "a".repeat(64);
+  const corpo = (id: string, coluna = "status") => JSON.stringify({ event: { type: "update_column_value", boardId: 18438464813, pulseId: Number(id), columnId: coluna } });
+  it("evento válido: invalida ao fim, com ou sem notificação na fila", async () => {
+    for (const relido_ of [relido(ativ({ categoria: "travado", data: "2026-12-30" })), null]) {
+      const t = depsTeste(relido_);
+      const invalidar = vi.fn();
+      const { resposta, trabalho } = tratarEProcessar(corpo("101"), S, S, cfg, AGORA, t.deps, invalidar);
+      expect(resposta.status).toBe(200);
+      expect(invalidar).not.toHaveBeenCalled(); // só depois do trabalho
+      await trabalho!();
+      expect(invalidar).toHaveBeenCalledTimes(1);
+    }
+  });
+  it("invalida mesmo quando a releitura falha", async () => {
+    const t = depsTeste(null);
+    t.deps.relerItem = async () => Promise.reject(new Error("monday fora"));
+    const invalidar = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await tratarEProcessar(corpo("101"), S, S, cfg, AGORA, t.deps, invalidar).trabalho!();
+    expect(invalidar).toHaveBeenCalledTimes(1);
+  });
+  it("token inválido, ausente ou segredo não configurado: nada a processar e nada invalidado", () => {
+    const t = depsTeste(null);
+    const invalidar = vi.fn();
+    for (const [token, segredo] of [["errado", S], [null, S], [S, undefined]] as const) {
+      const r = tratarEProcessar(corpo("101"), token, segredo, cfg, AGORA, t.deps, invalidar);
+      expect(r.trabalho).toBeNull();
+      expect(r.resposta.status).not.toBe(200);
+    }
+    expect(invalidar).not.toHaveBeenCalled();
   });
 });
 

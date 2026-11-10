@@ -4,7 +4,7 @@ import { montarPayload } from "../push/payload";
 import { agrupar, planejarEnvios, textoResumo, type Envio, type Pendente } from "./agrupar";
 import { dentroDaJanela, inicioDaJanelaDeHoje } from "./janela";
 import { avaliarRegras, type EventoItem, type ItemParaRegras, type NotificacaoFila } from "./regras";
-import type { EventoMonday } from "./webhook";
+import { tratarWebhook, type EventoMonday, type ResultadoWebhook } from "./webhook";
 
 export interface RepoFila {
   /** INSERT ... ON CONFLICT (chave_dedupe) DO NOTHING */
@@ -108,4 +108,39 @@ export async function processarEvento(ev: EventoMonday, agora: Date, deps: DepsN
   deps.log(`${pre}${evento.tipo === "coluna" ? ` ${evento.titulo}` : ""}: enfileirado ${ns.map((n) => `${n.regra}/${n.prioridade}`).join(", ")}`);
   if (ns.some((n) => n.prioridade === "imediata")) await enviarPendentes(agora, deps, cfg, { soImediatas: true });
   return ns;
+}
+
+/**
+ * Webhook completo: valida (token, handshake, filtro) e, só se há evento válido, devolve o trabalho a rodar depois de
+ * responder: reler o item e aplicar as regras e, SEMPRE ao fim (haja ou não notificação, e mesmo se falhar), expirar
+ * o cache da edição, para o toque na notificação já abrir a tela com o item novo. Token inválido não invalida nada.
+ */
+export function tratarEProcessar(
+  corpoTexto: string,
+  token: string | null,
+  segredo: string | undefined,
+  cfg: JornalConfig,
+  agora: Date,
+  deps: DepsNotificacoes,
+  invalidarEdicao: () => void,
+): { resposta: ResultadoWebhook; trabalho: (() => Promise<void>) | null } {
+  const resposta = tratarWebhook(corpoTexto, token, segredo, cfg);
+  const evento = resposta.evento;
+  if (!evento) return { resposta, trabalho: null };
+  return {
+    resposta,
+    trabalho: async () => {
+      try {
+        await processarEvento(evento, agora, deps, cfg);
+      } catch (e) {
+        console.error(`[webhook] item ${evento.itemId}: erro ${e instanceof Error ? e.message : "desconhecido"}`);
+      } finally {
+        try {
+          invalidarEdicao();
+        } catch (e) {
+          console.error(`[webhook] cache não invalidado: ${e instanceof Error ? e.message : "erro desconhecido"}`);
+        }
+      }
+    },
+  };
 }
