@@ -1,6 +1,6 @@
 // Monta as seções da edição diária. Função pura: tudo entra por argumento (itens, hoje, config).
 import { diasEntre, ehDiaUtil, proximoDiaUtil, rotuloDia, somarDias, type DataISO } from "../calendario";
-import type { JornalConfig } from "../config";
+import { ehTipoAssinatura, type JornalConfig } from "../config";
 import type { ItemEdicao, ItemJornal, ItemSemPrazo } from "./itens";
 import { ORDEM_NIVEL } from "../niveis";
 import { nivelUrgencia, piorNivelAberto, type Nivel } from "./urgencia";
@@ -91,9 +91,9 @@ function quando(dias: number): string {
   return dias === 0 ? "hoje" : dias === 1 ? "amanhã" : `em ${dias} dias`;
 }
 
-/** Kicker do contrato (dias corridos): "Contrato · vence hoje" | "Contrato · prazo amanhã" | "Contrato · prazo em N dias". */
-export function kickerContrato(dias: number): string {
-  return dias <= 0 ? "Contrato · vence hoje" : dias === 1 ? "Contrato · prazo amanhã" : `Contrato · prazo em ${dias} dias`;
+/** Kicker de documento para assinatura (dias corridos), com o Tipo do próprio item: "Distrato · vence hoje" | "Distrato · prazo amanhã" | "Distrato · prazo em N dias". */
+export function kickerAssinatura(tipo: string, dias: number): string {
+  return dias <= 0 ? `${tipo} · vence hoje` : dias === 1 ? `${tipo} · prazo amanhã` : `${tipo} · prazo em ${dias} dias`;
 }
 
 /** Kicker da pendência: "Atrasado há 1 dia" / "Atrasado há N dias". */
@@ -126,7 +126,7 @@ export function kickerPrazo(dias: number): string {
 
 /**
  * Manchete = o item aberto com o pior nível de urgência (preto > vermelho > amarelo). Desempate dentro do nível:
- * Contrato primeiro; depois a data mais antiga (preto) ou a mais próxima (demais); depois o nome.
+ * Documento para assinatura (tipos_assinatura) primeiro; depois a data mais antiga (preto) ou a mais próxima (demais); depois o nome.
  * Itens sem prazo só concorrem se estiverem travados. Pagamentos não entram (já fora de `itens`).
  */
 function escolherManchete(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: DataISO, cfg: JornalConfig): MancheteEdicao | null {
@@ -140,7 +140,7 @@ function escolherManchete(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: D
   candidatos.sort(
     (a, b) =>
       ordem(a.nivel) - ordem(b.nivel) ||
-      Number(b.item.tipo === "Contrato") - Number(a.item.tipo === "Contrato") ||
+      Number(ehTipoAssinatura(b.item.tipo, cfg)) - Number(ehTipoAssinatura(a.item.tipo, cfg)) ||
       (a.item.data === null ? 1 : 0) - (b.item.data === null ? 1 : 0) ||
       (a.item.data ?? "").localeCompare(b.item.data ?? "") || // preto: mais antiga; demais: mais próxima (ambos crescentes)
       a.item.nome.localeCompare(b.item.nome, "pt-BR"),
@@ -153,7 +153,7 @@ function escolherManchete(itens: ItemJornal[], semPrazo: ItemSemPrazo[], hoje: D
   }
   if (item.categoria === "travado") return { item, nivel, regra: "travado", motivo: item.observacao ?? "Item travado, sem motivo informado.", kicker: "Travado" };
   const dias = diasEntre(hoje, item.data as DataISO);
-  if (item.tipo === "Contrato") return { item, nivel, regra: "contrato", motivo: `Contrato com prazo ${quando(dias)}.`, kicker: kickerContrato(dias) };
+  if (ehTipoAssinatura(item.tipo, cfg)) return { item, nivel, regra: "contrato", motivo: `${item.tipo} com prazo ${quando(dias)}.`, kicker: kickerAssinatura(item.tipo, dias) };
   return { item, nivel, regra: dias <= 0 ? "hoje" : "proximo", motivo: `Prazo ${quando(dias)}.`, kicker: kickerPrazo(dias) };
 }
 
@@ -212,7 +212,7 @@ export function montarEdicao(itensBrutos: ItemJornal[], hoje: DataISO, cfg: Jorn
 
   const limiteContrato = somarDias(hoje, cfg.manchete.contrato_antecedencia_dias);
   const contratos = itens
-    .filter((i) => i.tipo === "Contrato" && i.categoria === "aberto" && i.data >= hoje && i.data <= limiteContrato) // travados já estão em "travados"
+    .filter((i) => ehTipoAssinatura(i.tipo, cfg) && i.categoria === "aberto" && i.data >= hoje && i.data <= limiteContrato) // travados já estão em "travados"
     .sort(porDataENome);
 
   let avisoNaoUtil: AvisoNaoUtil | null = null;

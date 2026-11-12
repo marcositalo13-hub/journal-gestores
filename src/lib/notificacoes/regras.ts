@@ -2,7 +2,7 @@
 // Nenhum texto leva valores monetários: o item das regras nem carrega o valor, os nomes passam por limparValores
 // e o payload ainda recusa qualquer texto com valor.
 import { diasEntre, diaDaSemana, hoje as hojeSP, type DataISO } from "../calendario";
-import { areaCurta, type JornalConfig } from "../config";
+import { areaCurta, ehTipoAssinatura, type JornalConfig } from "../config";
 import type { Categoria, TipoItem } from "../edicao/itens";
 import { limparValores } from "../push/payload";
 
@@ -97,14 +97,14 @@ export function avaliarRegras(evento: EventoItem, i: ItemParaRegras, agora: Date
   const ativ = i.tipoQuadro === "atividades";
   const humano = !i.geradoPeloColetor && !i.finalizada;
 
-  // R4: contrato novo (ou que virou contrato logo após criado), qualquer prazo. Fura o agrupamento.
-  const r4 = possiveis.has("R4") && ativ && humano && i.tipo === "Contrato" && aberto(i.categoria) && ehNovo(i.criadoEm, agora, cfg);
+  // R4: documento para assinatura novo (Contrato, Distrato...; ou que virou um logo após criado), qualquer prazo. Fura o agrupamento.
+  const r4 = possiveis.has("R4") && ativ && humano && ehTipoAssinatura(i.tipo, cfg) && aberto(i.categoria) && ehNovo(i.criadoEm, agora, cfg);
   if (r4) {
     add({
       chave_dedupe: `R4:${i.id}`,
       regra: "R4",
       prioridade: "imediata",
-      titulo: "Contrato para análise",
+      titulo: `${i.tipo} para análise`,
       corpo: `${prefixoArea(i, cfg)}: ${nome}${i.data ? ` · prazo ${ddmm(i.data)}` : ""}`,
     });
   }

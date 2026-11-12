@@ -62,6 +62,7 @@ export interface Aviso {
     | "item_sem_area"
     | "regra_sem_data"
     | "obrigatoria_vazia"
+    | "status_vazio"
     | "travado_sem_motivo"
     | "cadastro_sem_recorrencia"
     | "prazo_movido_para_subitens"
@@ -319,6 +320,11 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       if (idPorTitulo[ob] && !valorPreenchido(valores[ob], tipoCfg.colunas[ob])) {
         av({ ...ctx, codigo: "obrigatoria_vazia", mensagem: `"${n.nome}": campo obrigatório "${ob}" vazio.` });
       }
+    }
+    // Status vazio não esconde o item (conta como "aberto"), mas pede correção. Regra recorrente é rotulada pelo próprio coletor.
+    if (idPorTitulo[tipoCfg.status] && !n.status?.trim() && n.porArea?.classe !== "regra") {
+      const area = n.porArea ? (areaDaColuna(n, cfg) ?? n.porArea.areaGrupo) : null;
+      av({ ...ctx, codigo: "status_vazio", mensagem: `"${n.nome}"${area ? ` (${area})` : ""}: Status vazio; o item aparece como aberto. Preencha o Status no monday.` });
     }
     if (tipoCfg.status_travado && mesmoRotulo(n.status, tipoCfg.status_travado) && vazio(n.motivo)) {
       av({ ...ctx, codigo: "travado_sem_motivo", mensagem: `"${n.nome}": status "${tipoCfg.status_travado}" sem motivo em "${tipoCfg.campo_motivo}".` });

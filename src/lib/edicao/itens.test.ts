@@ -86,6 +86,23 @@ describe("categoria e tipo", () => {
   });
 });
 
+describe("documentos para assinatura (tipos_assinatura) e status vazio", () => {
+  const q = () =>
+    quadro("atividades", [
+      item({ nome: "distrato", valores: { Tipo: v({ label: "Distrato", text: "Distrato" }) }, status: null }),
+      item({ nome: "contrato", valores: { Tipo: v({ label: "contrato ", text: "contrato " }) } }),
+      item({ nome: "entrega", valores: { Tipo: v({ label: "Entrega", text: "Entrega" }) } }),
+    ]);
+  it("Distrato mantém o próprio rótulo como tipo (comparação normalizada: 'contrato ' também é Contrato)", () => {
+    expect(itensDe([q()]).map((i) => i.tipo)).toEqual(["Distrato", "contrato", "Entrega"]);
+  });
+  it("status vazio é 'aberto' e o item continua na edição (nunca é ignorado)", () => {
+    const [d] = itensDe([q()]);
+    expect(d).toMatchObject({ nome: "distrato", status: null, categoria: "aberto" });
+    expect(categoriaDoStatus("   ", "atividades")).toBe("aberto");
+  });
+});
+
 describe("campos copiados", () => {
   it("pagamentos: valor, motivo da aprovação, observação, recorrência, chave; dono = diretor", () => {
     const [i] = itensDe([

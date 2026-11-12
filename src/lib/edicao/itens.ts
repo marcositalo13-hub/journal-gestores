@@ -1,14 +1,15 @@
 // Transforma a leitura dos quadros (ler.ts) em itens prontos para montar a edição.
 // Puro: sem rede. Nunca expõe URLs do monday.
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaArea, type JornalConfig, type TipoQuadro } from "../config";
+import { ehTipoAssinatura, getConfig, gestorDaArea, type JornalConfig, type TipoQuadro } from "../config";
 import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo } from "../rotulos";
 import { areaDaColuna, ehRegraSemData, type ItemNormalizado, type QuadroLido } from "../coletor/ler";
 import { motivoAprovacao } from "./pagamentos";
 import type { MotivoSemPrazo } from "../sem-prazo";
 
-export type TipoItem = "Atividade" | "Entrega" | "Contrato" | "Pagamento";
+/** "Atividade" | "Entrega" | "Pagamento" ou, para documentos de assinatura, o próprio rótulo do Tipo no monday ("Contrato", "Distrato"...) */
+export type TipoItem = string;
 export type Categoria = "aberto" | "concluido" | "travado" | "cancelado";
 
 export interface ItemJornal {
@@ -54,7 +55,7 @@ export interface ItensJornal {
   semPrazo: ItemSemPrazo[];
 }
 
-const TIPOS_ITEM: TipoItem[] = ["Atividade", "Entrega", "Contrato", "Pagamento"];
+const TIPOS_ITEM: TipoItem[] = ["Atividade", "Entrega", "Pagamento"];
 
 export function categoriaDoStatus(status: string | null, tipo: TipoQuadro, cfg: JornalConfig = getConfig()): Categoria {
   const t = cfg.tipos_de_quadro[tipo];
@@ -62,12 +63,13 @@ export function categoriaDoStatus(status: string | null, tipo: TipoQuadro, cfg: 
   if (mesmoRotulo(s, t.status_concluido)) return "concluido";
   if (t.status_travado && mesmoRotulo(s, t.status_travado)) return "travado";
   if (mesmoRotulo(s, t.status_cancelado)) return "cancelado";
-  return "aberto"; // Aguardando autorização / Não iniciado / Em andamento / sem status
+  return "aberto"; // Aguardando autorização / Não iniciado / Em andamento / sem status (vazio nunca some: o coletor avisa "status_vazio")
 }
 
-function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro): TipoItem {
+function tipoDoItem(it: ItemNormalizado, tipoQuadro: TipoQuadro, cfg: JornalConfig): TipoItem {
   if (tipoQuadro === "pagamentos") return "Pagamento";
   const rotulo = it.valores["Tipo"]?.label?.trim();
+  if (rotulo && ehTipoAssinatura(rotulo, cfg)) return rotulo; // mantém o rótulo do próprio item (o kicker diz "Distrato", não "Contrato")
   return TIPOS_ITEM.find((t) => mesmoRotulo(t, rotulo)) ?? "Atividade";
 }
 
@@ -120,7 +122,7 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
         quadroId: q.id,
         tipoQuadro: q.tipo,
         dono: donoDoItem(it, q, cfg),
-        tipo: tipoDoItem(it, q.tipo),
+        tipo: tipoDoItem(it, q.tipo, cfg),
         status: it.status,
         categoria: categoriaDoStatus(it.status, q.tipo, cfg),
         ...(typeof valor === "number" ? { valor } : {}),

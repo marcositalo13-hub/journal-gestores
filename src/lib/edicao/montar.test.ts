@@ -354,6 +354,26 @@ describe("Contratos para análise", () => {
     expect(s.atrasados.map((p) => p.item.id)).toEqual([]); // o atrasado é a manchete: não se repete
   });
 
+  it("Distrato vale como Contrato: entra em 'Para sua assinatura' e a manchete diz 'Distrato · prazo amanhã'", () => {
+    const d = nda({ nome: "Assinatura Distrato Anexo 3", tipo: "Distrato" });
+    const ed1 = e([d]);
+    expect(ed1.contratos.map((i) => i.id)).toEqual([d.id]);
+    expect(ed1.manchete).toMatchObject({ regra: "contrato", kicker: "Distrato · prazo amanhã", motivo: "Distrato com prazo amanhã." });
+    const atrasado = mk({ nome: "Material", data: "2026-11-09" });
+    expect(secoesDeHoje(e([d, atrasado])).contratos.map((i) => i.id)).toEqual([d.id]);
+  });
+
+  it("desempate da manchete: Distrato ganha de uma atividade comum no mesmo nível e na mesma data", () => {
+    const comum = mk({ nome: "A atividade", data: "2026-11-11", dono: "Solange Mata" });
+    const d = nda({ nome: "Z distrato", tipo: "Distrato" });
+    expect(e([comum, d]).manchete?.item.id).toBe(d.id);
+  });
+
+  it("kicker de Contrato continua 'Contrato · …'; tipo fora de tipos_assinatura (Entrega) não é assinatura", () => {
+    expect(e([nda()]).manchete?.kicker).toBe("Contrato · prazo amanhã");
+    expect(e([mk({ tipo: "Entrega", data: "2026-11-11" })]).contratos).toEqual([]);
+  });
+
   it("janela [hoje, hoje + 10]: hoje e +10 entram; +11 não; ordenados por data e nome", () => {
     const a = nda({ nome: "B", data: "2026-11-20" });
     const b = nda({ nome: "A", data: "2026-11-20" });

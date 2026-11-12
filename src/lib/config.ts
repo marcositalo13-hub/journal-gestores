@@ -1,4 +1,5 @@
 import raw from "../../config/jornal.config.json";
+import { mesmoRotulo } from "./rotulos";
 
 export type TipoQuadro = "atividades" | "pagamentos";
 export type TipoColuna = "status" | "date" | "dropdown" | "text" | "numbers";
@@ -109,6 +110,8 @@ export interface JornalConfig {
   manchete: Manchete;
   urgencia: Urgencia;
   abas: Abas;
+  /** valores da coluna Tipo que são documentos para assinatura (seção "Para sua assinatura", R4, manchete); comparados como os demais rótulos */
+  tipos_assinatura: string[];
   pagamentos: PagamentosConfig;
   notificacoes: Notificacoes;
   /** recorte das fotos por slug ({"joao-silva": "center"}); o padrão é "north" */
@@ -284,6 +287,9 @@ export function validarConfig(c: unknown): JornalConfig {
   else if (typeof uc.atencao_dias_uteis !== "number" || !Number.isInteger(uc.atencao_dias_uteis) || uc.atencao_dias_uteis < 1) {
     erros.push(`urgencia.atencao_dias_uteis deve ser número inteiro >= 1`);
   }
+  if (!Array.isArray(o.tipos_assinatura) || o.tipos_assinatura.length === 0 || !o.tipos_assinatura.every((t) => typeof t === "string" && t.trim() !== "")) {
+    erros.push(`"tipos_assinatura" deve ser lista não vazia de textos`);
+  }
   const ab = (o.abas ?? {}) as Record<string, unknown>;
   if (typeof o.abas !== "object" || o.abas === null) erros.push(`"abas" deve ser objeto`);
   else {
@@ -360,6 +366,11 @@ export function acessoPagamentos(email: string | null | undefined, cfg: JornalCo
   if (!oculta) return { pode: true, oculta };
   const e = (email ?? "").trim().toLowerCase();
   return { pode: e !== "" && cfg.abas.previa_para.some((p) => p.trim().toLowerCase() === e), oculta };
+}
+
+/** O Tipo do item é de documento para assinatura (Contrato, Distrato...)? Comparação normalizada, como nos outros rótulos. */
+export function ehTipoAssinatura(tipo: string | null | undefined, cfg: JornalConfig = getConfig()): boolean {
+  return cfg.tipos_assinatura.some((t) => mesmoRotulo(t, tipo));
 }
 
 /** O e-mail está na lista de leitores? */

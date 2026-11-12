@@ -82,6 +82,30 @@ const ler = (itens: It[], gs = grupos, cols = colunas): QuadroLido =>
 const plano = (itens: It[]) => planejarQuadro(ler(itens), JANELA, cfg, HOJE);
 const de = <T extends AcaoArea["tipo"]>(a: AcaoArea[], t: T) => a.filter((x): x is Extract<AcaoArea, { tipo: T }> => x.tipo === t);
 
+describe("status vazio: o item segue visível como aberto e o coletor avisa", () => {
+  const q = () => ler([{ id: "1", nome: "Assinatura Distrato Anexo 3", tipo: "Distrato", prazo: "2026-11-04", grupo: OPER, status: undefined }]);
+
+  it("aviso 'status_vazio' com o item e a área", () => {
+    const av = q().avisos.filter((a) => a.codigo === "status_vazio");
+    expect(av).toHaveLength(1);
+    expect(av[0]).toMatchObject({ itemId: "1", itemNome: "Assinatura Distrato Anexo 3" });
+    expect(av[0].mensagem).toContain(OPER);
+  });
+  it("conta como 'aberto' na edição (aparece, atrasado) e Distrato é tipo de assinatura", () => {
+    const { itens } = montarItensJornal([q()], cfg);
+    expect(itens).toHaveLength(1);
+    expect(itens[0]).toMatchObject({ tipo: "Distrato", categoria: "aberto", status: null });
+    const e = montarEdicao(itens, HOJE, cfg, "x");
+    expect(e.pendencias.map((p) => p.item.nome)).toEqual(["Assinatura Distrato Anexo 3"]);
+  });
+  it("sem aviso quando há Status; regra recorrente sem Status é rotulada pelo coletor, sem 'status_vazio'", () => {
+    const comStatus = ler([{ id: "2", prazo: "2026-11-06", status: "Em andamento" }]);
+    expect(comStatus.avisos.some((a) => a.codigo === "status_vazio")).toBe(false);
+    const regra = ler([{ id: "3", rec: "4. Mensal", prazo: "2026-11-06", status: undefined }]);
+    expect(regra.avisos.some((a) => a.codigo === "status_vazio")).toBe(false);
+  });
+});
+
 describe("classificação", () => {
   it("Regra = recorrente sem Chave; Ocorrência = com Chave; Único = o resto", () => {
     expect(classificarItem("Semanal", null)).toBe("regra");

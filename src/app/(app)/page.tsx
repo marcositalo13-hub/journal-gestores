@@ -132,7 +132,7 @@ export default async function PaginaHoje({ searchParams }: PageProps<"/">) {
           )}
 
           {contratos.length > 0 && (
-            <Secao id="s-contratos" titulo="Contratos para análise">
+            <Secao id="s-contratos" titulo="Para sua assinatura">
               <ul>
                 {contratos.map((item) => {
                   const dias = diasEntre(hoje, item.data);

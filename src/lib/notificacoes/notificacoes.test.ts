@@ -125,6 +125,22 @@ describe("R3: pagamento novo aguardando aprovação", () => {
   });
 });
 
+describe("R4: Distrato também é documento para assinatura", () => {
+  it("imediata, com o próprio Tipo no título", () => {
+    const [n] = av(criado, ativ({ tipo: "Distrato", nome: "Assinatura Distrato Anexo 3", data: "2026-11-11" }));
+    expect(n).toMatchObject({ regra: "R4", prioridade: "imediata", titulo: "Distrato para análise", chave_dedupe: "R4:101" });
+    expect(n.corpo).toBe("Adm. e Financeira: Assinatura Distrato Anexo 3 · prazo 11/11");
+  });
+  it("tipos fora de tipos_assinatura não disparam R4", () => {
+    expect(av(criado, ativ({ tipo: "Entrega" })).map((x) => x.regra)).not.toContain("R4");
+  });
+  it("a config exige a lista tipos_assinatura", () => {
+    expect(() => validarConfig({ ...raw, tipos_assinatura: [] })).toThrow(/tipos_assinatura/);
+    expect(() => validarConfig({ ...raw, tipos_assinatura: [1] })).toThrow(/tipos_assinatura/);
+    expect(cfg.tipos_assinatura).toEqual(["Contrato", "Distrato"]);
+  });
+});
+
 describe("R4: contrato", () => {
   it("contrato novo, qualquer prazo, é imediato e não repete como R1", () => {
     expect(av(criado, ativ({ tipo: "Contrato", data: "2027-03-01" }))).toEqual([
