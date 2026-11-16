@@ -2,7 +2,7 @@
 export type MotivoSemPrazo = "sem_prazo" | "regra_sem_data";
 
 export const TEXTO_SEM_PRAZO = "Sem prazo";
-export const TEXTO_REGRA_SEM_DATA = "Recorrência sem data inicial — não gera as cópias";
+export const TEXTO_REGRA_SEM_DATA = "Recorrente sem prazo — a recorrência não avança";
 
 /** Texto do motivo: nas linhas da seção "Sem prazo", no rótulo de urgência e na folha de detalhes. */
 export function textoSemPrazo(motivo: MotivoSemPrazo | undefined): string {

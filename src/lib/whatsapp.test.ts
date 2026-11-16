@@ -20,9 +20,9 @@ describe("mensagemItem", () => {
     expect(mensagemItem({ nome: "X", tipo: "Atividade", data: null, motivo: "sem_prazo" }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
     expect(mensagemItem({ nome: "X", tipo: "Pagamento", data: null }, "Ana")).toBe('Olá, Ana. Qual é o prazo de "X"?');
   });
-  it("recorrência sem data inicial: pergunta a data da primeira entrega e explica", () => {
+  it("recorrente sem prazo: pergunta o prazo da próxima entrega e explica", () => {
     expect(mensagemItem({ nome: "Intercompany WIZ", tipo: "Atividade", data: null, motivo: "regra_sem_data" }, "Graziely")).toBe(
-      'Olá, Graziely. Qual é a data da primeira entrega de "Intercompany WIZ"? Sem ela, a recorrência não aparece no painel.',
+      'Olá, Graziely. Qual é o prazo da próxima entrega de "Intercompany WIZ"? Sem ele, a recorrência não avança.',
     );
   });
   it("nunca inclui o valor: a função nem recebe o campo, e um item com valor gera o mesmo texto", () => {

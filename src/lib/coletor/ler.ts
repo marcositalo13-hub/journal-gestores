@@ -1,5 +1,5 @@
 import { parseGrupoMes } from "../calendario";
-import { getConfig, gestorDaArea, grupoFinalizadasDoQuadro, type JornalConfig, type LayoutQuadro, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
+import { COLUNA_ANCORA, getConfig, gestorDaArea, grupoFinalizadasDoQuadro, type JornalConfig, type LayoutQuadro, type QuadroConfig, type TipoColuna, type TipoQuadro } from "../config";
 import { mondayQuery } from "../monday/client";
 import { parseFrequencia } from "../recorrencia";
 import { mesmoRotulo, parseRotulosDaColuna, resolverRotulo, type RotuloColuna } from "../rotulos";
@@ -94,7 +94,10 @@ export interface ColunaMapeada {
   rotulos?: RotuloColuna[];
 }
 
-/** Quadros por_area. Regra: recorrente sem Chave. Ocorrência: tem Chave. Único: o resto. */
+/**
+ * Quadros por_area. "regra" = o item recorrente VIVO (recorrência Semanal/Quinzenal/Mensal/Anual, sem Chave): um só item que
+ * avança de período em período. "ocorrencia" = tem Chave (cópia de histórico, ou ocorrência do modelo antigo). "unico" = o resto.
+ */
 export type ClasseItem = "regra" | "ocorrencia" | "unico";
 
 export interface DadosPorArea {
@@ -239,7 +242,8 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
     const achadas = quadro.columns.filter((c) => c.title.trim() === titulo);
     const col = achadas[0];
     if (!col) {
-      av({ codigo: "coluna_ausente", mensagem: `Coluna "${titulo}" (${tipoEsperado}) não existe no quadro.` });
+      const extra = titulo === COLUNA_ANCORA ? " O coletor a cria ao aplicar." : "";
+      av({ codigo: "coluna_ausente", mensagem: `Coluna "${titulo}" (${tipoEsperado}) não existe no quadro.${extra}` });
       idPorTitulo[titulo] = null;
       colunas[titulo] = null;
       continue;
@@ -268,7 +272,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
   const lista = qc.layout === "lista";
   const grupoFinalizadas = grupoFinalizadasDoQuadro(qc, cfg);
   if (porArea) {
-    exigeRotulo(tipoCfg.status, tipoCfg.status_regra);
+    exigeRotulo(tipoCfg.status, tipoCfg.status_concluido);
     for (const g of cfg.gestores) exigeRotulo("Área", g.area);
   }
   if (porMes && !quadro.groups.some((g) => g.title.trim() === cfg.grupo_cadastro)) {
@@ -321,8 +325,8 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
         av({ ...ctx, codigo: "obrigatoria_vazia", mensagem: `"${n.nome}": campo obrigatório "${ob}" vazio.` });
       }
     }
-    // Status vazio não esconde o item (conta como "aberto"), mas pede correção. Regra recorrente é rotulada pelo próprio coletor.
-    if (idPorTitulo[tipoCfg.status] && !n.status?.trim() && n.porArea?.classe !== "regra") {
+    // Status vazio não esconde o item (conta como "aberto"), mas pede correção.
+    if (idPorTitulo[tipoCfg.status] && !n.status?.trim()) {
       const area = n.porArea ? (areaDaColuna(n, cfg) ?? n.porArea.areaGrupo) : null;
       av({ ...ctx, codigo: "status_vazio", mensagem: `"${n.nome}"${area ? ` (${area})` : ""}: Status vazio; o item aparece como aberto. Preencha o Status no monday.` });
     }
@@ -340,7 +344,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
       av({
         ...ctx,
         codigo: "regra_sem_data",
-        mensagem: `Regra "${n.nome}" (${n.porArea?.areaGrupo}): sem "${tipoCfg.data}" (data da primeira entrega). Sem ela não são criadas as cópias e a recorrência não aparece no painel.`,
+        mensagem: `Atividade recorrente "${n.nome}" (${n.porArea?.areaGrupo}): sem "${tipoCfg.data}". Sem ele a recorrência não avança quando a atividade é concluída.`,
       });
     }
     if (n.porArea?.finalizada && n.porArea.classe !== "regra" && !gestorDaArea(areaDaColuna(n, cfg), cfg)) {
@@ -388,7 +392,7 @@ export function normalizarQuadro(qc: QuadroConfig, quadro: QuadroApi, itensApi: 
   };
 }
 
-/** Regra: recorrência válida e Chave vazia. Ocorrência: tem Chave. Único: o resto (inclui "Não recorrente" e vazio). */
+/** Recorrente vivo ("regra"): recorrência válida e Chave vazia. Ocorrência: tem Chave. Único: o resto (inclui "Não recorrente" e vazio). */
 export function classificarItem(recorrencia: string | null, chave: string | null): ClasseItem {
   if (chave && chave.trim()) return "ocorrencia";
   const f = parseFrequencia(recorrencia);
@@ -396,8 +400,8 @@ export function classificarItem(recorrencia: string | null, chave: string | null
 }
 
 /**
- * Regra recorrente (por_area) numa área, sem Prazo (nem datas nos subitens): o coletor não consegue projetar
- * as ocorrências e ela nunca apareceria. Vira item "sem prazo" na edição e aviso no coletor.
+ * Atividade recorrente viva (por_area) numa área, sem Prazo (nem datas nos subitens): a recorrência não tem de onde
+ * avançar. Vira item "sem prazo" na edição e aviso no coletor.
  */
 export function ehRegraSemData(it: Pick<ItemNormalizado, "porArea" | "data" | "datasSubitens">): boolean {
   return it.porArea?.classe === "regra" && it.porArea.areaGrupo !== null && !it.porArea.finalizada && !it.data && it.datasSubitens.length === 0;
@@ -466,6 +470,13 @@ export function detectarChavesDuplicadas(
     porChave.set(it.chave, [...(porChave.get(it.chave) ?? []), { id: it.id, grupo: it.grupo.titulo }]);
   }
   return [...porChave].filter(([, l]) => l.length > 1).map(([chave, l]) => ({ chave, itens: l }));
+}
+
+/** Lê e valida UM quadro do config (somente leitura); null se não existir ou estiver fora de alcance. */
+export async function lerQuadro(qc: QuadroConfig, cfg: JornalConfig = getConfig()): Promise<QuadroLido | null> {
+  if (cfg.quadros_ignorados.includes(qc.id)) return null;
+  const r = await buscarQuadro(qc.id);
+  return r ? normalizarQuadro(qc, r.quadro, r.itens, cfg) : null;
 }
 
 /** Lê e valida todos os quadros configurados (somente leitura). */

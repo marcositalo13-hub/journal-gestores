@@ -1,86 +1,20 @@
-// Quadro de Atividades por área: classificação, plano, edição. Sem rede.
+// Quadro de Atividades por área: classificação, plano, edição. Sem rede. (Recorrência viva: veja recorrencia-viva.test.ts.)
 import { describe, expect, it } from "vitest";
 import raw from "../../../config/jornal.config.json";
-import { getConfig, gestorDaArea, validarConfig } from "../config";
+import { gestorDaArea, validarConfig } from "../config";
 import { montarItensJornal } from "../edicao/itens";
 import { montarEdicao } from "../edicao/montar";
 import { janelaPadrao } from "../recorrencia";
-import { montarColumnValuesArea } from "./aplicar";
+import { valoresAvanco, valoresHistorico } from "./aplicar";
 import { RotuloNaoResolvido } from "../rotulos";
-import { classificarItem, detectarChavesDuplicadas, normalizarQuadro, type QuadroLido } from "./ler";
+import { classificarItem, detectarChavesDuplicadas, normalizarQuadro } from "./ler";
 import { cfgPorMes } from "./config-por-mes";
-import { nomeOcorrencia, planejarQuadro, type AcaoArea } from "./planejar";
+import { ADM, AREAS, CTRL, FINAL, OPER, STATUS, cfg, colunasCom, de, dropdownSettings, grupos, idArea, ler, planoEm, type It } from "./fixture-atividades";
+import { nomeOcorrencia, planejarQuadro } from "./planejar";
 
-const cfg = getConfig();
 const HOJE = "2026-11-05";
 const JANELA = janelaPadrao(HOJE); // 2026-11-01 → 2026-12-31
-const OPER = "Gerência de Operações e Suporte ao Cliente";
-const ADM = "Coordenação Administrativa e Financeira";
-const FINAL = "Atividades finalizadas";
-
-const CTRL = "Coordenação de Controladoria";
-
-// Rótulos como no quadro real (IDs de verdade, nomes com prefixo numérico).
-const statusSettings = (labels: Record<string, string>) => JSON.stringify({ labels });
-const dropdownSettings = (labels: [number, string][]) => JSON.stringify({ labels: labels.map(([id, name]) => ({ id, name })) });
-const STATUS = { "0": "Em andamento", "1": "Concluído", "2": "Travado", "10": "Cancelado", "17": "Não iniciado", "105": "Regra recorrente" };
-const REC: [number, string][] = [[1, "1. Não recorrente"], [2, "2. Diária"], [3, "Semanal"], [4, "3. Quinzenal"], [5, "4. Mensal"], [6, "5. Anual"]];
-const AREAS: [number, string][] = cfg.gestores.map((g, i) => [i + 1, g.area]);
-const idArea = (nome: string) => AREAS.find(([, n]) => n === nome)![0];
-
-const colunasCom = (status: Record<string, string> = STATUS, rec: [number, string][] = REC) => [
-  { id: "rec", title: "Recorrência", type: "dropdown", settings_str: dropdownSettings(rec) },
-  { id: "tipo", title: "Tipo", type: "status", settings_str: statusSettings({ "0": "Atividade", "1": "Entrega", "2": "Pagamento", "19": "Contrato" }) },
-  { id: "obs", title: "Observação", type: "text" },
-  { id: "prazo", title: "Prazo", type: "date" },
-  { id: "st", title: "Status", type: "status", settings_str: statusSettings(status) },
-  { id: "ch", title: "Chave", type: "text" },
-  { id: "area", title: "Área", type: "dropdown", settings_str: dropdownSettings(AREAS) },
-];
-const colunas = colunasCom();
-const grupos = [OPER, ADM, CTRL, FINAL].map((title, i) => ({ id: `g${i}`, title, position: String(i + 1) }));
-
-interface It {
-  id: string;
-  grupo?: string;
-  nome?: string;
-  rec?: string;
-  chave?: string;
-  prazo?: string;
-  status?: string;
-  tipo?: string;
-  area?: string;
-  obs?: string;
-}
-const api = (o: It) => {
-  const grupo = o.grupo ?? OPER;
-  return {
-    id: o.id,
-    name: o.nome ?? `Item ${o.id}`,
-    url: "https://x.monday.com/1",
-    updated_at: "2026-11-01T10:00:00Z",
-    group: { id: grupos.find((g) => g.title === grupo)?.id ?? "gx", title: grupo },
-    column_values: [
-      { id: "rec", text: o.rec ?? null, values: o.rec ? [{ label: o.rec }] : [] },
-      { id: "tipo", text: o.tipo ?? "Atividade", label: o.tipo ?? "Atividade" },
-      { id: "obs", text: o.obs ?? null },
-      { id: "prazo", text: o.prazo ?? null, date: o.prazo ?? null },
-      { id: "st", text: o.status ?? null, label: o.status ?? null },
-      { id: "ch", text: o.chave ?? null },
-      { id: "area", text: o.area ?? null, values: o.area ? [{ label: o.area }] : [] },
-    ],
-    subitems: [],
-  };
-};
-const ler = (itens: It[], gs = grupos, cols = colunas): QuadroLido =>
-  normalizarQuadro(
-    { id: "18438464813", tipo: "atividades", layout: "por_area", dono: "Solange Mata" },
-    { id: "18438464813", name: "Atividades", hierarchy_type: "multi_level", columns: cols, groups: gs, items_page: { cursor: null, items: [] } },
-    itens.map(api),
-    cfg,
-  );
-const plano = (itens: It[]) => planejarQuadro(ler(itens), JANELA, cfg, HOJE);
-const de = <T extends AcaoArea["tipo"]>(a: AcaoArea[], t: T) => a.filter((x): x is Extract<AcaoArea, { tipo: T }> => x.tipo === t);
+const plano = planoEm(HOJE);
 
 describe("status vazio: o item segue visível como aberto e o coletor avisa", () => {
   const q = () => ler([{ id: "1", nome: "Assinatura Distrato Anexo 3", tipo: "Distrato", prazo: "2026-11-04", grupo: OPER, status: undefined }]);
@@ -98,16 +32,16 @@ describe("status vazio: o item segue visível como aberto e o coletor avisa", ()
     const e = montarEdicao(itens, HOJE, cfg, "x");
     expect(e.pendencias.map((p) => p.item.nome)).toEqual(["Assinatura Distrato Anexo 3"]);
   });
-  it("sem aviso quando há Status; regra recorrente sem Status é rotulada pelo coletor, sem 'status_vazio'", () => {
+  it("sem aviso quando há Status; a atividade recorrente viva sem Status também é avisada (é um item como os outros)", () => {
     const comStatus = ler([{ id: "2", prazo: "2026-11-06", status: "Em andamento" }]);
     expect(comStatus.avisos.some((a) => a.codigo === "status_vazio")).toBe(false);
-    const regra = ler([{ id: "3", rec: "4. Mensal", prazo: "2026-11-06", status: undefined }]);
-    expect(regra.avisos.some((a) => a.codigo === "status_vazio")).toBe(false);
+    const recorrente = ler([{ id: "3", rec: "4. Mensal", prazo: "2026-11-06", status: undefined }]);
+    expect(recorrente.avisos.filter((a) => a.codigo === "status_vazio").map((a) => a.itemId)).toEqual(["3"]);
   });
 });
 
 describe("classificação", () => {
-  it("Regra = recorrente sem Chave; Ocorrência = com Chave; Único = o resto", () => {
+  it("Recorrente vivo ('regra') = recorrente sem Chave; com Chave = histórico/ocorrência; Único = o resto", () => {
     expect(classificarItem("Semanal", null)).toBe("regra");
     expect(classificarItem("4. Mensal", "")).toBe("regra");
     expect(classificarItem("3. Quinzenal", null)).toBe("regra");
@@ -168,78 +102,29 @@ describe("area_atualizada", () => {
   it("nunca toca na Área de itens em finalizadas", () => {
     expect(de(plano([{ id: "1", grupo: FINAL }, { id: "2", grupo: FINAL, area: ADM }]).acoesArea, "area_atualizada")).toEqual([]);
   });
-  it("regras também recebem Área", () => {
-    expect(de(plano([{ id: "1", rec: "Semanal", prazo: "2026-11-06" }]).acoesArea, "area_atualizada").map((a) => a.itemId)).toEqual(["1"]);
+  it("itens recorrentes também recebem Área", () => {
+    expect(de(plano([{ id: "1", rec: "Semanal", prazo: "2026-11-06", ancora: "2026-11-06" }]).acoesArea, "area_atualizada").map((a) => a.itemId)).toEqual(["1"]);
   });
 });
 
-describe("regra_rotulada", () => {
-  it("regra com Status diferente → rotula; já rotulada → nada; não-regra → nada", () => {
-    const p = plano([
-      { id: "1", rec: "Semanal", prazo: "2026-11-06", area: OPER },
-      { id: "2", rec: "4. Mensal", prazo: "2026-11-05", status: "Regra recorrente", area: OPER },
-      { id: "3", rec: "Semanal", chave: "9:2026-11-06", area: OPER },
-      { id: "4", rec: "1. Não recorrente", area: OPER },
-    ]);
-    expect(de(p.acoesArea, "regra_rotulada").map((a) => [a.itemId, a.statusAtual, a.status])).toEqual([["1", null, "Regra recorrente"]]);
+describe("o modelo antigo acabou: nada de cópias futuras nem rótulo 'Regra recorrente'", () => {
+  it("um item recorrente aberto, com Área e âncora em dia, não gera nenhuma ação (nem ocorrência, nem rótulo)", () => {
+    const p = plano([{ id: "77", nome: "Relatório", rec: "4. Mensal", prazo: "2026-11-05", status: "Não iniciado", area: OPER, ancora: "2026-11-05" }]);
+    expect(p.acoesArea).toEqual([]);
+    expect(p.acoes).toEqual([]);
+    expect(p.ocorrenciasExistentes).toBe(0);
   });
-});
-
-describe("seria_criada", () => {
-  it("nome '· dd/mm'", () => expect(nomeOcorrencia("[TESTE] Conciliação bancária", "2026-11-06")).toBe("[TESTE] Conciliação bancária · 06/11"));
-
-  it("projeta na janela, no grupo da própria regra, com chave regraId:data", () => {
-    const p = plano([{ id: "77", nome: "Relatório", rec: "4. Mensal", prazo: "2026-11-05", status: "Regra recorrente", area: OPER, tipo: "Entrega" }]);
-    const c = de(p.acoesArea, "seria_criada");
-    expect(c.map((a) => [a.itemNome, a.ocorrencia.chave, a.grupo.titulo, a.area])).toEqual([
-      ["Relatório · 05/11", "77:2026-11-05", OPER, OPER],
-      ["Relatório · 05/12", "77:2026-12-05", OPER, OPER],
-    ]);
-  });
-
-  it("semanal a partir de 06/11: 8 ocorrências até 25/12 (feriado mantido na data)", () => {
-    const c = de(plano([{ id: "5", nome: "Conciliação", rec: "Semanal", prazo: "2026-11-06", grupo: ADM, area: ADM }]).acoesArea, "seria_criada");
-    expect(c).toHaveLength(8);
-    expect(c[0].itemNome).toBe("Conciliação · 06/11");
-    expect(c.at(-1)?.itemNome).toBe("Conciliação · 25/12");
-    expect(c.at(-1)?.ocorrencia.dataOriginal).toBe("2026-12-25");
-    expect(c.every((a) => a.grupo.titulo === ADM)).toBe(true);
-  });
-
-  it("existência olha TODOS os grupos, inclusive finalizadas (ocorrência finalizada não renasce)", () => {
-    const p = plano([
-      { id: "77", rec: "4. Mensal", prazo: "2026-11-05", status: "Regra recorrente", area: OPER },
-      { id: "a", chave: "77:2026-11-05", grupo: FINAL, status: "Concluído", area: OPER },
-      { id: "b", chave: "77:2026-12-05", grupo: ADM, area: ADM },
-    ]);
-    expect(de(p.acoesArea, "seria_criada")).toEqual([]);
-    expect(p.ocorrenciasExistentes).toBe(2);
-  });
-
-  it("regras em finalizadas são recorrências encerradas: nunca projetadas nem rotuladas", () => {
-    const p = plano([{ id: "1", rec: "Semanal", prazo: "2026-11-06", grupo: FINAL, status: "Concluído" }]);
+  it("item ainda com Status 'Regra recorrente' não é re-rotulado: é só um item aberto", () => {
+    const p = plano([{ id: "77", rec: "4. Mensal", prazo: "2026-11-05", status: "Regra recorrente", area: OPER, ancora: "2026-11-05" }]);
     expect(p.acoesArea).toEqual([]);
   });
-
-  it("regra sem Prazo não projeta (mas é rotulada); nunca há grupos de mês no plano", () => {
-    const p = plano([{ id: "1", rec: "Semanal", area: OPER }]);
-    expect(de(p.acoesArea, "seria_criada")).toEqual([]);
-    expect(de(p.acoesArea, "regra_rotulada")).toHaveLength(1);
-    expect(p.acoes).toEqual([]);
+  it("nome da cópia de histórico: '{nome} · dd/mm'", () => expect(nomeOcorrencia("[TESTE] Conciliação bancária", "2026-11-06")).toBe("[TESTE] Conciliação bancária · 06/11"));
+  it("recorrentes em finalizadas são recorrências encerradas: ignorados", () => {
+    expect(plano([{ id: "1", rec: "Semanal", prazo: "2026-11-06", grupo: FINAL, status: "Concluído" }]).acoesArea).toEqual([]);
   });
-
-  it("column_values (por ID): copia Tipo, Recorrência e Observação; Status inicial, Prazo = data original, Chave e Área", () => {
-    const q = ler([{ id: "77", rec: "4. Mensal", prazo: "2026-11-05", tipo: "Entrega", status: "Regra recorrente", obs: "nota da regra" }]);
-    const oc = { chave: "77:2026-11-14", dataOriginal: "2026-11-14", dataEfetiva: "2026-11-14", grupoMes: "x", avisarEm: "2026-11-13" };
-    expect(montarColumnValuesArea(q.itens[0], oc, OPER, "atividades", q.colunas, cfg)).toEqual({
-      tipo: { index: 1 },
-      rec: { ids: [5] },
-      obs: "nota da regra",
-      st: { index: 17 },
-      prazo: { date: "2026-11-14" },
-      ch: "77:2026-11-14",
-      area: { ids: [idArea(OPER)] },
-    });
+  it("sem a coluna Âncora no quadro: o plano começa criando a coluna", () => {
+    const p = plano([{ id: "1", rec: "Semanal", prazo: "2026-11-06", area: OPER }], grupos, colunasCom(STATUS, undefined, false));
+    expect(p.acoesArea.map((a) => a.tipo)).toEqual(["coluna_criada", "ancora_atualizada"]);
   });
 });
 
@@ -255,7 +140,7 @@ describe("seria_finalizado", () => {
     for (const status of ["Em andamento", "Não iniciado", "Travado"]) expect(fin({ status, prazo: "2026-10-01" })).toEqual([]);
     expect(fin({ prazo: "2026-10-01" })).toEqual([]);
   });
-  it("sem Prazo não move; Ocorrência move; Regra nunca; já em finalizadas não move de novo", () => {
+  it("sem Prazo não move; histórico (com Chave) move; o item recorrente vivo nunca é movido (avança); já em finalizadas não move de novo", () => {
     expect(fin({ status: "Concluído" })).toEqual([]);
     expect(fin({ status: "Concluído", prazo: "2026-10-01", chave: "9:2026-10-01" })).toHaveLength(1);
     expect(fin({ status: "Concluído", prazo: "2026-10-01", rec: "Semanal" })).toEqual([]);
@@ -268,7 +153,7 @@ describe("seria_finalizado", () => {
 });
 
 describe("avisos do plano", () => {
-  it("Diária: aviso próprio, vira único (não projeta, não é rotulada)", () => {
+  it("Diária: aviso próprio, vira único", () => {
     const p = plano([{ id: "1", rec: "2. Diária", prazo: "2026-11-06", area: OPER }]);
     expect(p.avisos.map((a) => a.codigo)).toEqual(["recorrencia_diaria_nao_suportada"]);
     expect(p.acoesArea).toEqual([]);
@@ -280,36 +165,26 @@ describe("avisos do plano", () => {
   });
 });
 
-describe("idempotência", () => {
-  it("depois de aplicar o plano, um novo plano não tem nada a fazer", () => {
-    const antes: It[] = [
-      { id: "77", nome: "Relatório", rec: "4. Mensal", prazo: "2026-11-05", status: "Regra recorrente" },
-      { id: "5", nome: "Treino", prazo: "2026-10-20", status: "Concluído" },
-    ];
-    const p = plano(antes);
-    const depois: It[] = [
-      { ...antes[0], area: OPER },
-      { ...antes[1], area: OPER, grupo: FINAL },
-      ...de(p.acoesArea, "seria_criada").map((a, i) => ({ id: `n${i}`, nome: a.itemNome, chave: a.ocorrencia.chave, prazo: a.ocorrencia.dataOriginal, status: "Não iniciado", rec: "4. Mensal", area: a.area, grupo: a.grupo.titulo })),
-    ];
-    const novo = plano(depois);
-    expect(novo.acoesArea).toEqual([]);
-    expect(novo.ocorrenciasExistentes).toBe(2);
-  });
-});
-
 describe("edição", () => {
   const edicao = (itens: It[]) => montarItensJornal([ler(itens)], cfg);
 
-  it("entram ocorrências e únicos de áreas e finalizadas; regras nunca", () => {
+  it("o item recorrente vivo entra como um item comum; histórico em finalizadas também; recorrente em finalizadas também (é histórico)", () => {
     const { itens } = edicao([
-      { id: "r", rec: "Semanal", prazo: "2026-11-06", status: "Regra recorrente", area: OPER },
-      { id: "rf", rec: "Semanal", prazo: "2026-11-06", grupo: FINAL, area: OPER },
-      { id: "o", chave: "r:2026-11-06", prazo: "2026-11-06", area: OPER },
+      { id: "r", rec: "Semanal", prazo: "2026-11-06", status: "Não iniciado", area: OPER },
+      { id: "o", chave: "r:2026-10-30", prazo: "2026-10-30", grupo: FINAL, status: "Concluído", area: OPER },
       { id: "u", prazo: "2026-11-07", area: OPER },
-      { id: "f", prazo: "2026-10-01", grupo: FINAL, status: "Concluído", area: ADM },
     ]);
-    expect(itens.map((i) => i.id)).toEqual(["o", "u", "f"]);
+    expect(itens.map((i) => i.id)).toEqual(["r", "o", "u"]);
+    expect(itens.find((i) => i.id === "r")).toMatchObject({ categoria: "aberto", recorrencia: "Semanal", dono: "Lucas Martins" });
+  });
+
+  it("histórico em 'Atividades finalizadas' conta em 'confirmado no mês' do gestor", () => {
+    const { itens, semPrazo } = edicao([
+      { id: "h", nome: "Relatório · 03/11", chave: "r:2026-11-03", prazo: "2026-11-03", grupo: FINAL, status: "Concluído", area: OPER, rec: "4. Mensal" },
+      { id: "r", nome: "Relatório", rec: "4. Mensal", prazo: "2026-12-03", status: "Não iniciado", area: OPER },
+    ]);
+    const e = montarEdicao(itens, HOJE, cfg, "x", semPrazo);
+    expect(e.gestores.find((g) => g.nome === "Lucas Martins")?.mes).toEqual({ concluidos: 1, total: 1 });
   });
 
   it("dono: coluna Área; vazia → área do grupo; nenhuma → 'Sem área' com aviso", () => {
@@ -329,10 +204,10 @@ describe("edição", () => {
     expect(semPrazo.map((i) => [i.nome, i.dono])).toEqual([["teste", "Keite Martins"]]);
   });
 
-  it("travado usa Observação como motivo; regra de Status 'Regra recorrente' não vaza; Contrato segue valendo para a manchete", () => {
+  it("travado usa Observação como motivo; Contrato segue valendo para a manchete", () => {
     const { itens, semPrazo } = edicao([
       { id: "1", tipo: "Contrato", prazo: "2026-11-10", status: "Travado", obs: "Aguardando parecer", area: OPER },
-      { id: "2", rec: "Semanal", prazo: "2026-11-06", status: "Regra recorrente", area: OPER },
+      { id: "2", rec: "Semanal", prazo: "2026-11-12", status: "Não iniciado", area: OPER },
     ]);
     const e = montarEdicao(itens, HOJE, cfg, "x", semPrazo);
     expect(e.travados.map((t) => [t.item.dono, t.motivo])).toEqual([["Lucas Martins", "Aguardando parecer"]]);
@@ -396,7 +271,7 @@ describe("layout por_mes (genérico) não muda", () => {
 });
 
 describe("config", () => {
-  it("layouts e quadro aposentado", () => {
+  it("layouts e quadro aposentado; status_regra saiu; Âncora entrou nas colunas", () => {
     expect(cfg.quadros.map((q) => [q.id, q.layout])).toEqual([
       ["18434047675", "lista"],
       ["18438464813", "por_area"],
@@ -404,52 +279,45 @@ describe("config", () => {
     expect(cfg.quadros_ignorados).toContain("18434048054");
     expect(cfg.tipos_de_quadro.atividades.campo_motivo).toBe("Observação");
     expect(Object.keys(cfg.tipos_de_quadro.atividades.colunas)).not.toContain("Responsável");
+    expect(cfg.tipos_de_quadro.atividades.colunas["Âncora"]).toBe("text");
+    expect("status_regra" in cfg.tipos_de_quadro.atividades).toBe(false);
     expect(gestorDaArea(OPER, cfg)).toBe("Lucas Martins");
     expect(gestorDaArea(FINAL, cfg)).toBeNull();
   });
-  it("rejeita layout inválido, finalizar_apos_dias inválido, por_area sem status_regra, finalizadas igual a uma área", () => {
+  it("rejeita layout inválido, finalizar_apos_dias inválido, por_area sem Âncora, finalizadas igual a uma área", () => {
     const q = (o: object) => ({ ...raw, quadros: [{ ...raw.quadros[0], ...o }, raw.quadros[1]] });
     expect(() => validarConfig(q({ layout: "outro" }))).toThrow(/layout/);
     expect(() => validarConfig({ ...raw, finalizar_apos_dias: -1 })).toThrow(/finalizar_apos_dias/);
     expect(() => validarConfig({ ...raw, grupo_finalizadas: "" })).toThrow(/grupo_finalizadas/);
     expect(() => validarConfig({ ...raw, grupo_finalizadas: OPER })).toThrow(/grupo_finalizadas/);
-    const { status_regra: _r, ...semRegra } = raw.tipos_de_quadro.atividades;
-    void _r;
-    expect(() => validarConfig({ ...raw, tipos_de_quadro: { ...raw.tipos_de_quadro, atividades: semRegra } })).toThrow(/status_regra/);
+    const { "Âncora": _a, ...semAncora } = raw.tipos_de_quadro.atividades.colunas;
+    void _a;
+    const atividades = { ...raw.tipos_de_quadro.atividades, colunas: semAncora };
+    expect(() => validarConfig({ ...raw, tipos_de_quadro: { ...raw.tipos_de_quadro, atividades } })).toThrow(/Âncora/);
   });
 });
 
 describe("rótulos renomeados: gravação por ID", () => {
-  // Os usuários renomearam: "Não iniciado" → "0. Não iniciado", "Regra recorrente" → "6 - Regra Recorrente".
-  const renomeado = { ...STATUS, "17": "0. Não iniciado", "105": "6 - Regra Recorrente" };
-  const itemRegra: It = { id: "77", nome: "Relatório", rec: "4. Mensal", prazo: "2026-11-05", status: "6 - Regra Recorrente", area: OPER, obs: "Aguardando" };
+  // Os usuários renomearam: "Não iniciado" → "0. Não iniciado".
+  const renomeado = { ...STATUS, "17": "0. Não iniciado" };
+  const vivo: It = { id: "77", nome: "Relatório", rec: "4. Mensal", prazo: "2026-11-05", status: "Concluído", area: OPER, obs: "Aguardando", ancora: "2026-11-05" };
 
-  it("resolve o ID pelo nome normalizado, mesmo renomeado", () => {
-    const q = ler([itemRegra], grupos, colunasCom(renomeado));
+  it("o avanço resolve o Status inicial pelo nome normalizado, mesmo renomeado; o texto do rótulo nunca é enviado", () => {
+    const q = ler([vivo], grupos, colunasCom(renomeado));
     expect(q.avisos.filter((a) => a.codigo === "rotulo_nao_encontrado")).toEqual([]);
-    const oc = { chave: "77:2026-11-05", dataOriginal: "2026-11-05", dataEfetiva: "2026-11-05", grupoMes: "x" };
-    expect(montarColumnValuesArea(q.itens[0], oc, OPER, "atividades", q.colunas, cfg)).toMatchObject({ st: { index: 17 }, rec: { ids: [5] } });
-  });
-
-  it("regra já com o rótulo renomeado não é rotulada de novo (sem churn)", () => {
-    const p = planejarQuadro(ler([itemRegra], grupos, colunasCom(renomeado)), JANELA, cfg, HOJE);
-    expect(de(p.acoesArea, "regra_rotulada")).toEqual([]);
-  });
-
-  it("o texto do rótulo nunca é enviado: só IDs", () => {
-    const q = ler([itemRegra], grupos, colunasCom(renomeado));
-    const oc = { chave: "77:2026-11-05", dataOriginal: "2026-11-05", dataEfetiva: "2026-11-05", grupoMes: "x" };
-    const valores = montarColumnValuesArea(q.itens[0], oc, OPER, "atividades", q.colunas, cfg);
-    expect(JSON.stringify(valores)).not.toMatch(/Não iniciado|Mensal|Gerência/);
+    const av = de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "recorrencia_avancada")[0];
+    const valores = valoresAvanco(av, "atividades", q.colunas, cfg);
+    expect(valores).toEqual({ prazo: { date: "2026-12-05" }, st: { index: 17 }, anc: "2026-11-05" });
+    expect(JSON.stringify(valores)).not.toMatch(/Não iniciado/);
   });
 
   it("rótulo configurado que não existe mais: aviso no coletor + gravação lança (é pulada e vira falha)", () => {
     const sem = { ...STATUS };
     delete (sem as Record<string, string>)["17"]; // "Não iniciado" sumiu
-    const q = ler([itemRegra], grupos, colunasCom(sem));
+    const q = ler([vivo], grupos, colunasCom(sem));
     expect(q.avisos.filter((a) => a.codigo === "rotulo_nao_encontrado").map((a) => a.mensagem)).toEqual([expect.stringContaining("Não iniciado")]);
-    const oc = { chave: "77:2026-11-05", dataOriginal: "2026-11-05", dataEfetiva: "2026-11-05", grupoMes: "x" };
-    expect(() => montarColumnValuesArea(q.itens[0], oc, OPER, "atividades", q.colunas, cfg)).toThrow(RotuloNaoResolvido);
+    const av = de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "recorrencia_avancada")[0];
+    expect(() => valoresAvanco(av, "atividades", q.colunas, cfg)).toThrow(RotuloNaoResolvido);
   });
 
   it("área do config sem rótulo na coluna Área também é avisada", () => {
@@ -459,69 +327,58 @@ describe("rótulos renomeados: gravação por ID", () => {
   });
 });
 
-describe("Observação da regra acompanha as ocorrências", () => {
-  const oc = { chave: "9:2026-11-12", dataOriginal: "2026-11-12", dataEfetiva: "2026-11-12", grupoMes: "x" };
-  it("copiada quando preenchida; omitida quando vazia", () => {
-    const q = ler([{ id: "9", rec: "4. Mensal", prazo: "2026-11-12", area: CTRL, obs: "Aguardando fechamento da contabilidade" }, { id: "10", rec: "4. Mensal", prazo: "2026-11-12", area: CTRL }]);
-    expect(montarColumnValuesArea(q.itens[0], oc, CTRL, "atividades", q.colunas, cfg).obs).toBe("Aguardando fechamento da contabilidade");
-    expect(montarColumnValuesArea(q.itens[1], oc, CTRL, "atividades", q.colunas, cfg)).not.toHaveProperty("obs");
+describe("cópia de histórico: colunas (por ID)", () => {
+  it("copia Tipo, Área, Observação e Recorrência; Status de encerramento, Prazo encerrado e Chave", () => {
+    const q = ler([{ id: "9", nome: "Material CONFIS", rec: "4. Mensal", prazo: "2026-11-13", status: "Concluído", tipo: "Entrega", area: CTRL, grupo: CTRL, obs: "Aguardando fechamento da contabilidade", ancora: "2026-11-13" }]);
+    const h = de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "historico_criado")[0];
+    expect(h).toMatchObject({ nome: "Material CONFIS · 13/11", chave: "9:2026-11-13", grupo: { titulo: FINAL } });
+    expect(valoresHistorico(q.itens[0], h, "atividades", q.colunas, cfg)).toEqual({
+      tipo: { index: 1 },
+      area: { ids: [idArea(CTRL)] },
+      obs: "Aguardando fechamento da contabilidade",
+      rec: { ids: [5] },
+      st: { index: 1 },
+      prazo: { date: "2026-11-13" },
+      ch: "9:2026-11-13",
+    });
+  });
+  it("Observação vazia é omitida; sem a coluna Chave a cópia não é feita (lança)", () => {
+    const q = ler([{ id: "9", rec: "4. Mensal", prazo: "2026-11-13", status: "Cancelado", area: CTRL, grupo: CTRL, ancora: "2026-11-13" }]);
+    const h = de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "historico_criado")[0];
+    expect(valoresHistorico(q.itens[0], h, "atividades", q.colunas, cfg)).not.toHaveProperty("obs");
+    expect(valoresHistorico(q.itens[0], h, "atividades", q.colunas, cfg).st).toEqual({ index: 10 });
+    expect(() => valoresHistorico(q.itens[0], h, "atividades", { ...q.colunas, Chave: null }, cfg)).toThrow(/Chave/);
   });
 });
 
-describe("caso real: 4 regras mensais da Controladoria ('4. Mensal')", () => {
-  const regras: It[] = [
-    { id: "1", nome: "Material Panorama DICOL Mensal", prazo: "2026-11-09" },
-    { id: "2", nome: "Prévia Orçamentária WIZ", prazo: "2026-11-12" },
-    { id: "3", nome: "Material CONFIS", prazo: "2026-11-13" },
-    { id: "4", nome: "Material CONSAD", prazo: "2026-11-18" },
-  ].map((r) => ({ ...r, rec: "4. Mensal", status: "Não iniciado", grupo: CTRL, area: CTRL, obs: "Aguardando fechamento da contabilidade" }));
-
-  it("viram regras (rotuladas) e geram as ocorrências de novembro e dezembro", () => {
-    const q = ler(regras);
-    expect(q.itens.every((i) => i.porArea?.classe === "regra")).toBe(true);
-    const p = planejarQuadro(q, janelaPadrao("2026-11-09"), cfg, "2026-11-09");
-    expect(de(p.acoesArea, "regra_rotulada")).toHaveLength(4);
-    const criadas = de(p.acoesArea, "seria_criada");
-    expect(criadas.map((a) => a.itemNome)).toEqual([
-      "Material Panorama DICOL Mensal · 09/11", "Material Panorama DICOL Mensal · 09/12",
-      "Prévia Orçamentária WIZ · 12/11", "Prévia Orçamentária WIZ · 12/12",
-      "Material CONFIS · 13/11", "Material CONFIS · 13/12",
-      "Material CONSAD · 18/11", "Material CONSAD · 18/12",
-    ]);
-    expect(criadas.every((a) => a.grupo.titulo === CTRL)).toBe(true);
-    const valores = montarColumnValuesArea(q.itens[0], criadas[0].ocorrencia, CTRL, "atividades", q.colunas, cfg);
-    expect(valores).toMatchObject({ obs: "Aguardando fechamento da contabilidade", rec: { ids: [5] }, st: { index: 17 }, area: { ids: [idArea(CTRL)] } });
-  });
-});
-
-describe("recorrência sem data inicial (regra_sem_data)", () => {
-  const semData = [
-    { id: "r1", nome: "Intercompany WIZ", rec: "4. Mensal", status: "Regra recorrente", area: OPER },
-    { id: "r2", nome: "Intercompany BRB", rec: "4. Mensal", status: "Regra recorrente", grupo: CTRL, area: CTRL },
+describe("recorrente sem Prazo (regra_sem_data)", () => {
+  const semData: It[] = [
+    { id: "r1", nome: "Intercompany WIZ", rec: "4. Mensal", status: "Não iniciado", area: OPER },
+    { id: "r2", nome: "Intercompany BRB", rec: "4. Mensal", status: "Não iniciado", grupo: CTRL, area: CTRL },
   ];
 
-  it("o coletor avisa por regra, com nome e área, e não cria nada", () => {
-    const q = ler(semData);
+  it("o coletor avisa por item, com nome e área, e não faz nada com a recorrência (mesmo concluído)", () => {
+    const q = ler([...semData, { id: "r3", nome: "Concluído sem data", rec: "4. Mensal", status: "Concluído", area: OPER }]);
     const avisos = q.avisos.filter((a) => a.codigo === "regra_sem_data");
     expect(avisos.map((a) => a.itemNome)).toEqual(["Intercompany WIZ", "Intercompany BRB"]);
-    expect(avisos[0].mensagem).toContain("Intercompany WIZ");
     expect(avisos[0].mensagem).toContain(OPER);
-    expect(avisos[0].mensagem).toContain("não são criadas as cópias");
-    expect(de(planejarQuadro(q, JANELA, cfg, HOJE).acoesArea, "seria_criada")).toEqual([]);
+    expect(avisos[0].mensagem).toContain("não avança");
+    const p = planejarQuadro(q, JANELA, cfg, HOJE);
+    expect(p.acoesArea.filter((a) => a.tipo !== "area_atualizada")).toEqual([]);
   });
 
-  it("não avisa: regra com data, regra cancelada ou concluída, regra em finalizadas, item único sem data", () => {
+  it("não avisa: com Prazo, cancelado ou concluído, em finalizadas, item único sem data", () => {
     const q = ler([
-      { id: "1", rec: "4. Mensal", status: "Regra recorrente", prazo: "2026-11-10", area: OPER },
+      { id: "1", rec: "4. Mensal", status: "Não iniciado", prazo: "2026-11-10", area: OPER },
       { id: "2", rec: "4. Mensal", status: "Cancelado", area: OPER },
       { id: "3", rec: "4. Mensal", status: "Concluído", area: OPER },
-      { id: "4", rec: "4. Mensal", status: "Regra recorrente", grupo: FINAL, area: OPER },
+      { id: "4", rec: "4. Mensal", status: "Não iniciado", grupo: FINAL, area: OPER },
       { id: "5", status: "Em andamento", area: OPER },
     ]);
     expect(q.avisos.filter((a) => a.codigo === "regra_sem_data")).toEqual([]);
   });
 
-  it("entram em semPrazo com motivo regra_sem_data, no gestor da área; itens comuns sem data têm motivo sem_prazo", () => {
+  it("continuam visíveis em semPrazo com o motivo próprio, no gestor da área; itens comuns sem data têm motivo sem_prazo", () => {
     const q = ler([...semData, { id: "u1", nome: "Comum sem data", status: "Em andamento", area: OPER }]);
     const { itens, semPrazo } = montarItensJornal([q], cfg);
     expect(itens).toEqual([]);
@@ -529,22 +386,7 @@ describe("recorrência sem data inicial (regra_sem_data)", () => {
     expect(porNome["Intercompany WIZ"]).toMatchObject({ motivo: "regra_sem_data", data: null, dono: gestorDaArea(OPER, cfg) });
     expect(porNome["Intercompany BRB"]).toMatchObject({ motivo: "regra_sem_data", dono: gestorDaArea(CTRL, cfg) });
     expect(porNome["Comum sem data"]).toMatchObject({ motivo: "sem_prazo" });
-  });
-
-  it("regras com data, canceladas ou em finalizadas continuam fora; a edição e as contagens do gestor incluem as duas espécies", () => {
-    const q = ler([
-      ...semData,
-      { id: "c1", nome: "Comum sem data", status: "Em andamento", area: OPER },
-      { id: "d1", nome: "Regra datada", rec: "4. Mensal", status: "Regra recorrente", prazo: "2026-11-10", area: OPER },
-      { id: "x1", nome: "Regra cancelada", rec: "4. Mensal", status: "Cancelado", area: OPER },
-      { id: "f1", nome: "Regra encerrada", rec: "4. Mensal", status: "Regra recorrente", grupo: FINAL, area: OPER },
-    ]);
-    const { itens, semPrazo } = montarItensJornal([q], cfg);
-    expect(itens).toEqual([]);
-    const e = montarEdicao(itens, HOJE, cfg, "2026-11-05T13:00:00Z", semPrazo);
-    expect(e.semPrazo.map((s) => s.nome).sort()).toEqual(["Comum sem data", "Intercompany BRB", "Intercompany WIZ"]);
-    const dono = gestorDaArea(OPER, cfg)!;
-    expect(e.gestores.find((g) => g.nome === dono)?.contagens.semPrazo).toBe(2); // WIZ + comum
-    expect(e.gestores.find((g) => g.nome === gestorDaArea(CTRL, cfg))?.contagens.semPrazo).toBe(1); // BRB
+    const e = montarEdicao(itens, HOJE, cfg, "x", semPrazo);
+    expect(e.gestores.find((g) => g.nome === gestorDaArea(OPER, cfg))?.contagens.semPrazo).toBe(2);
   });
 });

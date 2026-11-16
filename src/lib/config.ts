@@ -73,6 +73,9 @@ export interface QuadroConfig {
   finalizar_apos_dias?: number;
 }
 
+/** Coluna de texto (oculta) dos quadros por_area: dia-base da recorrência (YYYY-MM-DD), gravado pelo coletor. */
+export const COLUNA_ANCORA = "Âncora";
+
 export interface TipoQuadroConfig {
   data: string;
   status: string;
@@ -83,8 +86,6 @@ export interface TipoQuadroConfig {
   status_travado?: string;
   status_cancelado: string;
   status_inicial: string;
-  /** só em quadros por_area: rótulo que marca um item como regra de recorrência */
-  status_regra?: string;
   campo_motivo: string;
   ajuste_dia_nao_util: AjusteDiaNaoUtil;
 }
@@ -233,8 +234,9 @@ export function validarConfig(c: unknown): JornalConfig {
     }
     if (x?.layout === "por_area") {
       const t = ((o.tipos_de_quadro ?? {}) as Record<string, Record<string, unknown> | undefined>)[String(x?.tipo)];
-      if (typeof t?.status_regra !== "string") erros.push(`quadros[${i}]: layout por_area exige tipos_de_quadro.${String(x?.tipo)}.status_regra`);
-      if (!(t?.colunas && "Área" in (t.colunas as object))) erros.push(`quadros[${i}]: layout por_area exige a coluna "Área" em tipos_de_quadro.${String(x?.tipo)}.colunas`);
+      for (const k of ["Área", COLUNA_ANCORA]) {
+        if (!(t?.colunas && k in (t.colunas as object))) erros.push(`quadros[${i}]: layout por_area exige a coluna "${k}" em tipos_de_quadro.${String(x?.tipo)}.colunas`);
+      }
     }
   });
 

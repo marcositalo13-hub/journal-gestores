@@ -130,7 +130,7 @@ describe("rótulo de itens sem prazo", () => {
   it("sem prazo comum, recorrência sem data inicial e travado sem prazo; sempre amarelo (travado: vermelho)", () => {
     const sem = (motivo: "sem_prazo" | "regra_sem_data", categoria: Categoria = "aberto") => ({ data: null, categoria, motivo });
     expect(rotuloUrgencia(sem("sem_prazo"), HOJE, cfg)).toBe("Sem prazo");
-    expect(rotuloUrgencia(sem("regra_sem_data"), HOJE, cfg)).toBe("Recorrência sem data inicial — não gera as cópias");
+    expect(rotuloUrgencia(sem("regra_sem_data"), HOJE, cfg)).toBe("Recorrente sem prazo — a recorrência não avança");
     expect(nivelUrgencia(sem("regra_sem_data"), HOJE, cfg)).toBe("amarelo");
     expect(rotuloUrgencia(sem("sem_prazo", "travado"), HOJE, cfg)).toBe("Travado");
   });

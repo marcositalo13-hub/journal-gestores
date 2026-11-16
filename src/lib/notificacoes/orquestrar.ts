@@ -30,6 +30,8 @@ export interface DepsNotificacoes {
   enviarATodos(payload: string): Promise<void>;
   relerItem(itemId: string, boardId: string): Promise<ItemRelido | null>;
   contagens(): Promise<{ hoje: number; atrasados: number } | null>;
+  /** recorrência viva: ao mudar o Status de um item de Atividades, cria o histórico e avança o item (devolve uma linha de log) */
+  processarRecorrencia?(itemId: string, boardId: string): Promise<string | null>;
   log(linha: string): void;
 }
 
@@ -94,6 +96,15 @@ export async function processarEvento(ev: EventoMonday, agora: Date, deps: DepsN
       return [];
     }
     evento = { tipo: "coluna", titulo };
+    // Status mudou num item de Atividades: a recorrência é processada já (o coletor repete como rede de segurança).
+    if (relido.tipoQuadro === "atividades" && titulo === cfg.tipos_de_quadro.atividades.status && deps.processarRecorrencia) {
+      try {
+        const linha = await deps.processarRecorrencia(ev.itemId, ev.boardId);
+        if (linha) deps.log(`${pre}: recorrência ${linha}`);
+      } catch (e) {
+        deps.log(`${pre}: recorrência falhou (${e instanceof Error ? e.message : "erro desconhecido"}); o coletor tenta de novo`);
+      }
+    }
   }
   if (!relido.item) {
     deps.log(`${pre}: ignorado (regra/modelo, não entra na edição)`);

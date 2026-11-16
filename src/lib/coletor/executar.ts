@@ -3,8 +3,8 @@ import { coberturaCalendario, hoje } from "../calendario";
 import { getConfig } from "../config";
 import { janelaPadrao, type Janela } from "../recorrencia";
 import { aplicarPlano, type RelatorioAplicacao } from "./aplicar";
-import { lerQuadros, type Aviso, type QuadroLido } from "./ler";
-import { planejarQuadro, type PlanoQuadro } from "./planejar";
+import { lerQuadro, lerQuadros, type Aviso, type QuadroLido } from "./ler";
+import { planejarQuadro, type AcaoArea, type PlanoQuadro } from "./planejar";
 
 export interface ContagemPlano {
   existe: number;
@@ -13,7 +13,13 @@ export interface ContagemPlano {
   /** por_area */
   area_atualizada: number;
   /** por_area */
-  regra_rotulada: number;
+  coluna_criada: number;
+  /** por_area: cópias de histórico */
+  historico_criado: number;
+  /** por_area */
+  recorrencia_avancada: number;
+  /** por_area */
+  ancora_atualizada: number;
   /** por_area */
   seria_finalizado: number;
 }
@@ -30,7 +36,10 @@ export interface RelatorioQuadro {
   itensCriados: RelatorioAplicacao["itensCriados"];
   itensMovidos: RelatorioAplicacao["itensMovidos"];
   areasAtualizadas: RelatorioAplicacao["areasAtualizadas"];
-  regrasRotuladas: RelatorioAplicacao["regrasRotuladas"];
+  colunasCriadas: RelatorioAplicacao["colunasCriadas"];
+  historicosCriados: RelatorioAplicacao["historicosCriados"];
+  recorrenciasAvancadas: RelatorioAplicacao["recorrenciasAvancadas"];
+  ancorasAtualizadas: RelatorioAplicacao["ancorasAtualizadas"];
   falhas: RelatorioAplicacao["falhas"];
 }
 
@@ -56,7 +65,10 @@ const contar = (p: PlanoQuadro): ContagemPlano => {
     seria_criada: p.acoes.filter((a) => a.tipo === "seria_criada").length + area("seria_criada"),
     seria_movido: p.acoes.filter((a) => a.tipo === "seria_movido").length,
     area_atualizada: area("area_atualizada"),
-    regra_rotulada: area("regra_rotulada"),
+    coluna_criada: area("coluna_criada"),
+    historico_criado: area("historico_criado"),
+    recorrencia_avancada: area("recorrencia_avancada"),
+    ancora_atualizada: area("ancora_atualizada"),
     seria_finalizado: area("seria_finalizado"),
   };
 };
@@ -96,7 +108,10 @@ export async function executarColeta({ aplicar }: { aplicar: boolean }): Promise
       itensCriados: r?.itensCriados ?? [],
       itensMovidos: r?.itensMovidos ?? [],
       areasAtualizadas: r?.areasAtualizadas ?? [],
-      regrasRotuladas: r?.regrasRotuladas ?? [],
+      colunasCriadas: r?.colunasCriadas ?? [],
+      historicosCriados: r?.historicosCriados ?? [],
+      recorrenciasAvancadas: r?.recorrenciasAvancadas ?? [],
+      ancorasAtualizadas: r?.ancorasAtualizadas ?? [],
       falhas: r?.falhas ?? [],
     };
   });
@@ -111,6 +126,32 @@ export async function executarColeta({ aplicar }: { aplicar: boolean }): Promise
     durationMs: Date.now() - inicio,
     detalhe: { antes, depois },
   };
+}
+
+const ACOES_RECORRENCIA = new Set<AcaoArea["tipo"]>(["historico_criado", "recorrencia_avancada", "ancora_atualizada"]);
+
+/** Do plano do quadro, só o que é da recorrência deste item (e a criação da coluna Âncora, se ele precisar dela). */
+export function acoesRecorrenciaDoItem(acoes: AcaoArea[], itemId: string): AcaoArea[] {
+  const doItem = acoes.filter((a) => ACOES_RECORRENCIA.has(a.tipo) && "itemId" in a && a.itemId === itemId);
+  return doItem.length ? [...acoes.filter((a) => a.tipo === "coluna_criada"), ...doItem] : [];
+}
+
+/**
+ * Webhook (mudança de Status): processa NA HORA a recorrência de um item do quadro de Atividades (histórico + avanço
+ * ou âncora). Lê o quadro inteiro, porque a Chave do histórico é procurada no quadro todo; aplica só as ações desse
+ * item. O coletor de hora em hora faz o mesmo para todos (rede de segurança). null = nada a fazer.
+ */
+export async function processarRecorrenteDoItem(itemId: string, boardId: string): Promise<RelatorioAplicacao | null> {
+  const cfg = getConfig();
+  const qc = cfg.quadros.find((q) => q.id === boardId);
+  if (!qc || qc.layout !== "por_area") return null;
+  const q = await lerQuadro(qc, cfg);
+  if (!q) return null;
+  const ref = hoje();
+  const plano = planejarQuadro(q, janelaPadrao(ref), cfg, ref);
+  plano.acoesArea = acoesRecorrenciaDoItem(plano.acoesArea, itemId);
+  if (!plano.acoesArea.length) return null;
+  return aplicarPlano(q, plano, cfg);
 }
 
 /** Relatório sem o `detalhe` pesado (para resposta HTTP). */

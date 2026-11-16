@@ -12,15 +12,17 @@ function imprimirPlanoArea(q: QuadroLido, p: PlanoQuadro, avisos: Aviso[]) {
   const classes = (c: string) => q.itens.filter((i) => i.porArea?.classe === c).length;
   console.log(`\n■ ${q.nome} (${q.id}) · ${q.tipo} · por_area · ${q.hierarchyType ?? "?"}`);
   console.log(
-    `  itens ${q.itens.length} (regras ${classes("regra")} · ocorrências ${classes("ocorrencia")} · únicos ${classes("unico")}) · grupos ${q.grupos.length}\n` +
-      `  area_atualizada ${cont("area_atualizada")} · regra_rotulada ${cont("regra_rotulada")} · seria_criada ${cont("seria_criada")} · seria_finalizado ${cont("seria_finalizado")} · existe ${p.ocorrenciasExistentes} · avisos ${avisos.length}`,
+    `  itens ${q.itens.length} (recorrentes ${classes("regra")} · com Chave ${classes("ocorrencia")} · únicos ${classes("unico")}) · grupos ${q.grupos.length}\n` +
+      `  coluna_criada ${cont("coluna_criada")} · area_atualizada ${cont("area_atualizada")} · historico_criado ${cont("historico_criado")} · recorrencia_avancada ${cont("recorrencia_avancada")} · ancora_atualizada ${cont("ancora_atualizada")} · seria_finalizado ${cont("seria_finalizado")} · avisos ${avisos.length}`,
   );
   for (const a of avisos) console.log(`  ⚠ [${a.codigo}] ${a.mensagem}`);
   for (const a of p.acoesArea) {
-    if (a.tipo === "area_atualizada") console.log(`  • area_atualizada  ${a.itemNome} · ${a.areaAtual ?? "(vazia)"} → ${a.area}`);
-    else if (a.tipo === "regra_rotulada") console.log(`  • regra_rotulada   ${a.itemNome} · ${a.statusAtual ?? "(vazio)"} → ${a.status}`);
-    else if (a.tipo === "seria_criada") console.log(`  • seria_criada     ${a.itemNome} · ${a.ocorrencia.dataOriginal} · ${a.grupo.titulo} · ${a.ocorrencia.chave}`);
-    else console.log(`  • seria_finalizado ${a.itemNome} · ${a.status} em ${a.data} → ${a.grupo.titulo}`);
+    if (a.tipo === "coluna_criada") console.log(`  • coluna_criada        ${a.titulo} (texto)`);
+    else if (a.tipo === "area_atualizada") console.log(`  • area_atualizada      ${a.itemNome} · ${a.areaAtual ?? "(vazia)"} → ${a.area}`);
+    else if (a.tipo === "historico_criado") console.log(`  • historico_criado     ${a.nome} · ${a.status} · ${a.data} · ${a.grupo.titulo} · ${a.chave}`);
+    else if (a.tipo === "recorrencia_avancada") console.log(`  • recorrencia_avancada ${a.itemNome} · ${a.statusAtual} ${a.de} → ${a.status} ${a.para} · âncora ${a.ancora}`);
+    else if (a.tipo === "ancora_atualizada") console.log(`  • ancora_atualizada    ${a.itemNome} · ${a.ancoraAtual ?? "(vazia)"} → ${a.ancora}`);
+    else console.log(`  • seria_finalizado     ${a.itemNome} · ${a.status} em ${a.data} → ${a.grupo.titulo}`);
   }
 }
 
@@ -73,11 +75,14 @@ function imprimirRelatorio(r: RelatorioQuadro) {
   for (const g of r.gruposCriados) console.log(`  + grupo     ${g.titulo} (${g.id})`);
   for (const g of r.gruposReordenados) console.log(`  ↕ grupo     ${g.titulo} → depois de ${g.depoisDe}`);
   for (const a of r.areasAtualizadas) console.log(`  ≡ área      ${a.nome} → ${a.area}`);
-  for (const a of r.regrasRotuladas) console.log(`  ≡ regra     ${a.nome} → ${a.status}`);
+  for (const c of r.colunasCriadas) console.log(`  + coluna    ${c.titulo} (${c.id})`);
+  for (const h of r.historicosCriados) console.log(`  + histórico ${h.nome} · ${h.chave} · id ${h.id}`);
+  for (const a of r.recorrenciasAvancadas) console.log(`  ↻ avançou   ${a.nome} · ${a.de} → ${a.para}`);
+  for (const a of r.ancorasAtualizadas) console.log(`  ⚓ âncora    ${a.nome} → ${a.ancora}`);
   for (const i of r.itensCriados) console.log(`  + item      ${i.nome} · ${i.data} · ${i.grupo} · ${i.chave} · id ${i.id}`);
   for (const i of r.itensMovidos) console.log(`  → movido    ${i.nome} (${i.id}) → ${i.grupo}`);
   for (const f of r.falhas) console.log(`  ✗ ${f.acao} · ${f.alvo} · ${f.erro}`);
-  if (![r.gruposCriados, r.gruposReordenados, r.areasAtualizadas, r.regrasRotuladas, r.itensCriados, r.itensMovidos, r.falhas].some((l) => l.length)) {
+  if (![r.gruposCriados, r.gruposReordenados, r.areasAtualizadas, r.colunasCriadas, r.historicosCriados, r.recorrenciasAvancadas, r.ancorasAtualizadas, r.itensCriados, r.itensMovidos, r.falhas].some((l) => l.length)) {
     console.log("  (nada a fazer)");
   }
 }

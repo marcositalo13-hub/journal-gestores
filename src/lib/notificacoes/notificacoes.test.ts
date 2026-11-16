@@ -305,6 +305,26 @@ describe("processarEvento (webhook → fila)", () => {
     await processarEvento(ev({ tipo: "update_column_value", columnId: "status" }), AGORA, t.deps, cfg);
     expect(t.linhas.map((l) => l.chave_dedupe)).toEqual(["R2:101:2026-11-10"]);
   });
+  it("mudança de Status em Atividades processa a recorrência na hora; outras colunas, criação e Pagamentos não", async () => {
+    const t = depsTeste(relido(ativ({ categoria: "concluido" })));
+    const rec = vi.fn(async () => "histórico 101:2026-11-10, avançou 2026-11-10 → 2026-12-10");
+    t.deps.processarRecorrencia = rec;
+    await processarEvento(ev({ tipo: "update_column_value", columnId: "status" }), AGORA, t.deps, cfg);
+    expect(rec).toHaveBeenCalledWith("101", "18438464813");
+    expect(t.deps.log).toHaveBeenCalledWith(expect.stringContaining("recorrência histórico 101:2026-11-10"));
+    for (const e of [ev({ tipo: "update_column_value", columnId: "prazo" }), ev()]) await processarEvento(e, AGORA, t.deps, cfg);
+    const p = depsTeste(relido(pag(), "pagamentos"));
+    p.deps.processarRecorrencia = rec;
+    await processarEvento(ev({ tipo: "update_column_value", columnId: "status" }), AGORA, p.deps, cfg);
+    expect(rec).toHaveBeenCalledTimes(1);
+  });
+  it("falha na recorrência não derruba as notificações (o coletor tenta de novo)", async () => {
+    const t = depsTeste(relido(ativ({ categoria: "travado", data: "2026-12-30" })));
+    t.deps.processarRecorrencia = vi.fn(async () => Promise.reject(new Error("HTTP 500")));
+    await processarEvento(ev({ tipo: "update_column_value", columnId: "status" }), AGORA, t.deps, cfg);
+    expect(t.linhas.map((l) => l.regra)).toEqual(["R2"]);
+    expect(t.deps.log).toHaveBeenCalledWith(expect.stringContaining("recorrência falhou"));
+  });
   it("ignora Área, Chave, Observação e colunas desconhecidas (inclusive as gravadas pelo coletor)", async () => {
     const t = depsTeste(relido(ativ({ categoria: "travado" })));
     for (const c of ["area", "chave", "obs", "mes"]) await processarEvento(ev({ tipo: "update_column_value", columnId: c }), AGORA, t.deps, cfg);

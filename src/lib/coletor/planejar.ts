@@ -1,9 +1,9 @@
 // Planejamento puro (sem escrita): o que o coletor CRIARIA/MOVERIA no monday.
 import { ddmm, hoje as hojeSP, somarDias, type DataISO } from "../calendario";
-import { finalizarAposDiasDoQuadro, getConfig, type JornalConfig } from "../config";
+import { COLUNA_ANCORA, finalizarAposDiasDoQuadro, getConfig, type JornalConfig } from "../config";
 import { mesmoRotulo } from "../rotulos";
-import { montarOcorrencia, parseFrequencia, projetarOcorrencias, type Janela, type Ocorrencia } from "../recorrencia";
-import type { Aviso, QuadroLido } from "./ler";
+import { ancoraEfetiva, montarOcorrencia, parseFrequencia, projetarOcorrencias, proximaData, type Janela, type Ocorrencia } from "../recorrencia";
+import { areaDaColuna, type Aviso, type ItemNormalizado, type QuadroLido } from "./ler";
 
 export interface AcaoBase {
   itemId: string;
@@ -19,9 +19,15 @@ export type Acao =
 
 /** Ações de quadros por_area (aplicadas nesta ordem). */
 export type AcaoArea =
+  /** a coluna oculta "Âncora" não existe: é criada antes de qualquer gravação de âncora */
+  | { tipo: "coluna_criada"; titulo: string }
   | { tipo: "area_atualizada"; itemId: string; itemNome: string; area: string; areaAtual: string | null }
-  | { tipo: "regra_rotulada"; itemId: string; itemNome: string; statusAtual: string | null; status: string }
-  | { tipo: "seria_criada"; regraId: string; regraNome: string; itemNome: string; ocorrencia: Ocorrencia; area: string; grupo: { id: string; titulo: string } }
+  /** (a) cópia de histórico do período encerrado, criada direto em "Atividades finalizadas", com Chave `${itemId}:${Prazo}` */
+  | { tipo: "historico_criado"; itemId: string; itemNome: string; nome: string; chave: string; data: DataISO; status: string; area: string | null; grupo: { id: string; titulo: string } }
+  /** (b) o item vivo avança: Prazo = próxima data, Status = inicial, Âncora */
+  | { tipo: "recorrencia_avancada"; itemId: string; itemNome: string; de: DataISO; para: DataISO; ancora: DataISO; status: string; statusAtual: string }
+  /** alguém mudou o Prazo à mão (ou a âncora estava vazia): a âncora passa a ser o Prazo */
+  | { tipo: "ancora_atualizada"; itemId: string; itemNome: string; ancora: DataISO; ancoraAtual: string | null }
   | { tipo: "seria_finalizado"; itemId: string; itemNome: string; data: DataISO; status: string; grupo: { id: string; titulo: string } };
 
 export interface PlanoQuadro {
@@ -31,35 +37,71 @@ export interface PlanoQuadro {
   acoes: Acao[];
   /** só em quadros por_area */
   acoesArea: AcaoArea[];
-  /** por_area: ocorrências projetadas que já existem no quadro */
+  /** por_mes: ocorrências projetadas que já existem no quadro (por_area não projeta mais)*/
   ocorrenciasExistentes: number;
   /** regras ignoradas (ex.: canceladas no Cadastro) */
   ignorados: { itemId: string; itemNome: string; motivo: string }[];
   avisos: Aviso[];
 }
 
-/** "[TESTE] Conciliação bancária · 06/11" */
+/** "[TESTE] Conciliação bancária · 06/11" (também o nome da cópia de histórico) */
 export function nomeOcorrencia(nomeRegra: string, dataOriginal: DataISO): string {
   return `${nomeRegra} · ${ddmm(dataOriginal)}`;
 }
 
-/** Plano de um quadro por_area: Área, rótulo das regras, ocorrências e finalização. Grupos de mês nunca entram aqui. */
-function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
+/**
+ * Uma atividade recorrente viva (modelo de item único, estilo ClickUp). Concluída ou cancelada: (a) cópia de histórico em
+ * "Atividades finalizadas" com Chave `${id}:${Prazo}`, pulada se essa Chave já existe no quadro (isso torna o passo
+ * idempotente: se (b) falhou numa rodada, a seguinte só refaz (b)); (b) o item avança um período a partir do Prazo atual
+ * e volta ao Status inicial. Aberta: só confere a âncora. Sem Prazo: nada (o aviso sai na leitura).
+ */
+export function planejarRecorrente(
+  it: ItemNormalizado,
+  q: Pick<QuadroLido, "grupos" | "grupoFinalizadas" | "tipo">,
+  chaves: ReadonlySet<string>,
+  cfg: JornalConfig = getConfig(),
+): AcaoArea[] {
+  const t = cfg.tipos_de_quadro[q.tipo];
+  const freq = parseFrequencia(it.recorrencia);
+  if (!it.data || freq === null || freq === "nao_recorrente" || freq === "diaria") return [];
+  const ctx = { itemId: it.id, itemNome: it.nome };
+  const ancoraAtual = it.valores[COLUNA_ANCORA]?.text || null;
+  const { ancora, mudou } = ancoraEfetiva(freq, it.data, ancoraAtual);
+  const encerrado = mesmoRotulo(it.status, t.status_concluido) || mesmoRotulo(it.status, t.status_cancelado);
+  if (!encerrado) return mudou ? [{ tipo: "ancora_atualizada", ...ctx, ancora, ancoraAtual }] : [];
+
+  const out: AcaoArea[] = [];
+  const chave = `${it.id}:${it.data}`;
+  if (!chaves.has(chave)) {
+    const finalizadas = q.grupos.find((g) => g.titulo === q.grupoFinalizadas);
+    if (!finalizadas) return []; // sem onde guardar o histórico, não avança (o aviso "grupo_finalizadas_ausente" já saiu)
+    const area = areaDaColuna(it, cfg) ?? it.porArea?.areaGrupo ?? null;
+    out.push({ tipo: "historico_criado", ...ctx, nome: nomeOcorrencia(it.nome, it.data), chave, data: it.data, status: it.status!, area, grupo: finalizadas });
+  }
+  const para = proximaData(freq, it.data, ancora);
+  // Semanal/Quinzenal não têm dia fixo: a âncora acompanha o Prazo. Mensal/Anual guardam o dia-base (31 volta depois de fevereiro).
+  const novaAncora = freq === "Semanal" || freq === "Quinzenal" ? para : ancora;
+  out.push({ tipo: "recorrencia_avancada", ...ctx, de: it.data, para, ancora: novaAncora, status: t.status_inicial, statusAtual: it.status! });
+  return out;
+}
+
+/** Plano de um quadro por_area: coluna Âncora, Área, recorrências vivas e finalização. Nunca cria ocorrências futuras. */
+function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, ref: DataISO, cfg: JornalConfig): PlanoQuadro {
   const t = cfg.tipos_de_quadro[q.tipo];
   const limite = somarDias(ref, -cfg.finalizar_apos_dias);
   const finalizadas = q.grupos.find((g) => g.titulo === q.grupoFinalizadas);
 
-  // Existência no quadro INTEIRO: uma ocorrência finalizada não pode renascer.
+  // Existência no quadro INTEIRO: uma cópia de histórico, onde quer que esteja, nunca é criada duas vezes.
   const chaves = new Set(q.itens.flatMap((i) => (i.chave ? [i.chave] : [])));
 
+  const coluna: AcaoArea[] = COLUNA_ANCORA in t.colunas && !q.colunas[COLUNA_ANCORA] ? [{ tipo: "coluna_criada", titulo: COLUNA_ANCORA }] : [];
   const areas: AcaoArea[] = [];
-  const rotulos: AcaoArea[] = [];
-  const criar: AcaoArea[] = [];
+  const recorrentes: AcaoArea[] = [];
   const finalizar: AcaoArea[] = [];
 
   for (const it of q.itens) {
     const pa = it.porArea;
-    if (!pa || pa.finalizada || !pa.areaGrupo) continue; // finalizadas (inclui regras encerradas) e grupos desconhecidos: nada a fazer
+    if (!pa || pa.finalizada || !pa.areaGrupo) continue; // finalizadas (inclui recorrências encerradas) e grupos desconhecidos: nada a fazer
     const ctx = { itemId: it.id, itemNome: it.nome };
 
     const atual = it.valores["Área"]?.labels ?? [];
@@ -68,14 +110,7 @@ function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref:
     }
 
     if (pa.classe === "regra") {
-      if (t.status_regra && !mesmoRotulo(it.status, t.status_regra)) rotulos.push({ tipo: "regra_rotulada", ...ctx, statusAtual: it.status, status: t.status_regra });
-      const freq = parseFrequencia(it.recorrencia);
-      if (!it.data || freq === null || freq === "nao_recorrente" || freq === "diaria") continue; // sem data: já avisado como obrigatória vazia
-      const grupo = { id: it.grupo.id, titulo: it.grupo.titulo };
-      for (const oc of projetarOcorrencias({ id: it.id, frequencia: freq, dataBase: it.data, ajuste: t.ajuste_dia_nao_util }, janela, cfg)) {
-        if (chaves.has(oc.chave)) plano.ocorrenciasExistentes++;
-        else criar.push({ tipo: "seria_criada", regraId: it.id, regraNome: it.nome, itemNome: nomeOcorrencia(it.nome, oc.dataOriginal), ocorrencia: oc, area: pa.areaGrupo, grupo });
-      }
+      recorrentes.push(...planejarRecorrente(it, q, chaves, cfg));
       continue;
     }
 
@@ -90,7 +125,7 @@ function planejarPorArea(q: QuadroLido, plano: PlanoQuadro, janela: Janela, ref:
     }
   }
 
-  plano.acoesArea = [...areas, ...rotulos, ...criar, ...finalizar];
+  plano.acoesArea = [...coluna, ...areas, ...recorrentes, ...finalizar];
   return plano;
 }
 
@@ -122,7 +157,7 @@ export function planejarLista(q: QuadroLido, plano: PlanoQuadro, ref: DataISO, c
 export function planejarQuadro(q: QuadroLido, janela: Janela, cfg: JornalConfig = getConfig(), ref: DataISO = hojeSP(undefined, cfg)): PlanoQuadro {
   const tipoCfg = cfg.tipos_de_quadro[q.tipo];
   const plano: PlanoQuadro = { quadroId: q.id, quadroNome: q.nome, janela, acoes: [], acoesArea: [], ocorrenciasExistentes: 0, ignorados: [], avisos: [] };
-  if (q.layout === "por_area") return planejarPorArea(q, plano, janela, ref, cfg);
+  if (q.layout === "por_area") return planejarPorArea(q, plano, ref, cfg);
   if (q.layout === "lista") return planejarLista(q, plano, ref, cfg);
   const grupos = new Set(q.grupos.map((g) => g.titulo));
 

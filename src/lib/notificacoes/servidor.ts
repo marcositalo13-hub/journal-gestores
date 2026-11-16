@@ -1,5 +1,6 @@
 // Ligações reais das notificações (Supabase com service role, push, monday). Só servidor.
 import "server-only";
+import { processarRecorrenteDoItem } from "../coletor/executar";
 import { getConfig } from "../config";
 import { obterEdicao } from "../edicao/obter";
 import { enviarPush } from "../push/enviar";
@@ -59,6 +60,17 @@ export function depsReais(): DepsNotificacoes {
       }
     },
     relerItem: (itemId, boardId) => relerItem(itemId, boardId, cfg),
+    async processarRecorrencia(itemId, boardId) {
+      const r = await processarRecorrenteDoItem(itemId, boardId);
+      if (!r) return null;
+      const partes = [
+        ...r.historicosCriados.map((h) => `histórico ${h.chave}`),
+        ...r.recorrenciasAvancadas.map((a) => `avançou ${a.de} → ${a.para}`),
+        ...r.ancorasAtualizadas.map((a) => `âncora ${a.ancora}`),
+        ...r.falhas.map((f) => `falha ${f.acao}: ${f.erro}`),
+      ];
+      return partes.join(", ") || null;
+    },
     async contagens() {
       const e = await obterEdicao();
       return { hoje: e.hoje.filter((i) => i.categoria !== "concluido").length, atrasados: e.pendencias.length };

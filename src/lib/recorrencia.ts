@@ -106,6 +106,48 @@ function* datasOriginais(regra: RegraRecorrencia, fim: DataISO): Generator<DataI
   }
 }
 
+// ---------- modelo de item único (estilo ClickUp): um item vivo que avança de período em período ----------
+
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Dia esperado para a âncora num mês (ex.: âncora 31 em fevereiro → 28/29). */
+function diaAncorado(ancora: DataISO, ano: number, mes: number): number {
+  return Math.min(partes(ancora)[2], ultimoDiaDoMes(ano, mes));
+}
+
+/**
+ * Âncora válida para o Prazo atual. Vazia (ou ilegível) → o próprio Prazo. Se o Prazo não cai onde a âncora mandaria
+ * (Mensal: o dia ancorado no mês do Prazo; Anual: mês e dia ancorados; Semanal/Quinzenal: o próprio Prazo), alguém
+ * mudou a data à mão e a âncora passa a ser o novo Prazo. `mudou` = é preciso gravar.
+ */
+export function ancoraEfetiva(freq: Frequencia, prazo: DataISO, ancoraAtual: string | null | undefined): { ancora: DataISO; mudou: boolean } {
+  const a = (ancoraAtual ?? "").trim();
+  if (!DATA_ISO.test(a)) return { ancora: prazo, mudou: true };
+  const [py, pm, pd] = partes(prazo);
+  let confere: boolean;
+  if (freq === "Mensal") confere = pd === diaAncorado(a, py, pm);
+  else if (freq === "Anual") confere = pm === partes(a)[1] && pd === diaAncorado(a, py, pm);
+  else confere = a === prazo;
+  return confere ? { ancora: a, mudou: false } : { ancora: prazo, mudou: true };
+}
+
+/**
+ * Próximo Prazo: um período depois do Prazo atual (nunca da data de conclusão). Semanal +7; Quinzenal +14;
+ * Mensal: mês seguinte no dia da âncora, limitado ao fim do mês (31 → 28/02 → 31/03); Anual: ano seguinte, mesmo
+ * dia/mês da âncora (29/02 → 28/02 nos anos comuns, volta a 29 no bissexto).
+ */
+export function proximaData(freq: Frequencia, prazo: DataISO, ancora: DataISO): DataISO {
+  if (freq === "Semanal") return somarDias(prazo, 7);
+  if (freq === "Quinzenal") return somarDias(prazo, 14);
+  const [py, pm] = partes(prazo);
+  if (freq === "Mensal") {
+    const [y, m] = somarMeses(py, pm, 1);
+    return formatar(y, m, diaAncorado(ancora, y, m));
+  }
+  const [, am] = partes(ancora);
+  return formatar(py + 1, am, diaAncorado(ancora, py + 1, am));
+}
+
 /** Ocorrências da regra dentro da janela (por data original), nunca antes da data base. */
 export function projetarOcorrencias(regra: RegraRecorrencia, janela: Janela, cfg: JornalConfig = getConfig()): Ocorrencia[] {
   const out: Ocorrencia[] = [];

@@ -32,8 +32,8 @@ export function LinhaItem({ item, hoje, children }: { item: ItemEdicao; hoje: Da
 }
 
 /**
- * Linha da seção "Sem prazo": nome; "{gestor} · {área curta}"; e o motivo ("Sem prazo" ou "Recorrência sem data
- * inicial — não gera as cópias"), na cor do nível (amarelo; vermelho se o item também estiver travado).
+ * Linha da seção "Sem prazo": nome; "{gestor} · {área curta}"; e o motivo ("Sem prazo" ou "Recorrente sem prazo —
+ * a recorrência não avança"), na cor do nível (amarelo; vermelho se o item também estiver travado).
  */
 export function LinhaSemPrazo({ item, hoje }: { item: ItemSemPrazo; hoje: DataISO }) {
   const { nivel, rotulo } = urgenciaDoItem(item, hoje, getConfig());

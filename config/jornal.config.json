@@ -26,7 +26,7 @@
   "finalizar_apos_dias": 7,
   "formato_grupo_mes": "{Mes} {AAAA}",
   "tipos_de_quadro": {
-    "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Observação":"text","Chave":"text","Área":"dropdown"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","status_inicial":"Não iniciado","status_regra":"Regra recorrente","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"},
+    "atividades": {"data":"Prazo","status":"Status","colunas":{"Tipo":"status","Prazo":"date","Status":"status","Recorrência":"dropdown","Observação":"text","Chave":"text","Área":"dropdown","Âncora":"text"},"obrigatorias":["Prazo","Tipo"],"status_concluido":"Concluído","status_travado":"Travado","status_cancelado":"Cancelado","status_inicial":"Não iniciado","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"},
     "pagamentos": {"data":"Vencimento","status":"Status","colunas":{"Valor (R$)":"numbers","Vencimento":"date","Status":"status","Observação":"text","Autorizado por":"text","Autorizado em":"date"},"obrigatorias":["Vencimento","Valor (R$)"],"status_concluido":"Autorizado","status_cancelado":"Cancelado","status_inicial":"Aguardando autorização","campo_motivo":"Observação","ajuste_dia_nao_util":"manter_e_avisar"}
   },
   "empate_dia_util": "anterior",

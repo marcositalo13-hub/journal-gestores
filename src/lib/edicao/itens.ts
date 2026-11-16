@@ -43,7 +43,7 @@ export interface ItemJornal {
 /** Item sem nenhuma data (nem nos subitens): nunca some, aparece em semPrazo. */
 export type ItemSemPrazo = Omit<ItemJornal, "data" | "dataHerdada"> & {
   data: null;
-  /** "sem_prazo": item comum sem data; "regra_sem_data": regra recorrente sem data inicial (não gera cópias) */
+  /** "sem_prazo": item comum sem data; "regra_sem_data": atividade recorrente sem prazo (a recorrência não avança) */
   motivo: MotivoSemPrazo;
 };
 
@@ -79,12 +79,12 @@ export const SEM_AREA = "Sem área";
 /**
  * O item entra na edição?
  * por_mes: ocorrências em grupos de mês e avulsos ("Não recorrente") ainda no Cadastro.
- * por_area: ocorrências e únicos dos grupos de área e de finalizadas (regras nunca).
+ * por_area: tudo o que está nos grupos de área (inclusive o item recorrente vivo) e em finalizadas (histórico).
  * lista (Pagamentos): todos os grupos (o histórico de autorizados inclui os já finalizados).
  */
 function entra(it: ItemNormalizado, cfg: JornalConfig): boolean {
   if (it.lista) return true;
-  if (it.porArea) return it.porArea.classe !== "regra" && (it.porArea.areaGrupo !== null || it.porArea.finalizada);
+  if (it.porArea) return it.porArea.areaGrupo !== null || it.porArea.finalizada;
   if (it.noCadastro) return parseFrequencia(it.recorrencia) === "nao_recorrente"; // regras recorrentes já têm ocorrências
   return parseGrupoMes(it.grupo.titulo, cfg) !== null;
 }
@@ -113,7 +113,7 @@ export function montarItensJornal(quadros: QuadroLido[], cfg: JornalConfig = get
   for (const q of quadros) {
     const tcfg = cfg.tipos_de_quadro[q.tipo];
     for (const it of q.itens) {
-      const regraSemData = ehRegraSemData(it); // regras com data nunca entram; sem data, aparecem em "Sem prazo"
+      const regraSemData = ehRegraSemData(it); // recorrente vivo sem Prazo: "Sem prazo" com o motivo próprio
       if (!entra(it, cfg) && !regraSemData) continue;
       const valor = it.valores["Valor (R$)"]?.number;
       const base = {
